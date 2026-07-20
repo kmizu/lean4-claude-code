@@ -3,14 +3,19 @@ package shallot.cli
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
 
+/** The Shallot CLI — every language operation below runs through code
+  * EXTRACTED from Lean (parser = the formally verified PEG interpreter,
+  * typechecker = proven sound+complete, interpreter = proven type-sound,
+  * VM = proven equivalent to the interpreter).
+  */
 object Main:
+  private def readSource(path: String): String =
+    new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8)
+
   /** Differential harness, Scala side: evaluate the EXTRACTED case table
-    * (`shallot.gen.cases`) and emit the same canonical JSONL as the Lean
-    * runner. Key order and formatting must match `lean/Runner.lean`.
+    * and emit the same canonical JSONL as the Lean runner (Runner.lean).
     */
   def dumpJsonl: String =
-    // Deep-recursion corpus cases (07x) need a big stack; the extracted
-    // interpreter is fuel-bounded, non-tail structural recursion.
     shallot.rt.Stack.run(256) {
       val lines = shallot.gen.cases.map { case (id, result) =>
         s"""{"case":"$id","phase":"eval","status":"ok","result":"$result"}"""
@@ -21,11 +26,19 @@ object Main:
   def main(args: Array[String]): Unit =
     args.toList match
       case "version" :: _ =>
-        println("shallot-cli 0.1.0 (M2)")
+        println("shallot-cli 1.0.0 (all language operations are Lean-extracted)")
+      case "run" :: path :: _ =>
+        println(shallot.rt.Stack.run(256) { shallot.gen.runSource(readSource(path)) })
+      case "eval" :: src :: _ =>
+        println(shallot.rt.Stack.run(256) { shallot.gen.runSource(src) })
       case "dump" :: out :: _ =>
         Files.write(Paths.get(out), dumpJsonl.getBytes(StandardCharsets.UTF_8))
         System.err.println(s"shallot-cli: wrote $out")
       case "dump" :: Nil =>
         print(dumpJsonl)
       case _ =>
-        println("usage: shallot-cli <version|dump [outfile]> (run/typecheck/compile land in M7+)")
+        println("""usage: shallot-cli <command>
+          |  run <file>    parse (verified PEG), typecheck, evaluate a .shl file
+          |  eval <src>    same, on a source string argument
+          |  dump [file]   differential-harness JSONL (extracted case table)
+          |  version""".stripMargin)
