@@ -35,4 +35,12 @@ namespace Shallot
 #guard (shift origin 3).x = 3
 #guard greet "kouta" = "hello, kouta"
 
+-- Recursive demo functions (M2)
+#guard fact 10 = 3628800
+#guard fib 20 = 6765
+#guard gcd 48 36 = 12
+#guard gcd 0 5 = 5
+#guard gcd 17 5 = 1
+#guard describeColor .green = "green"
+
 end Shallot

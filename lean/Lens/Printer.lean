@@ -80,6 +80,10 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "intDiv", [a, b] => s!"RT.intDiv({a}, {b})"
   | "intMod", [a, b] => s!"RT.intMod({a}, {b})"
   | "strAppend", [a, b] => s!"({a} + {b})"
+  | "eq", [a, b] => s!"({a} == {b})"
+  | "lt", [a, b] => s!"({a} < {b})"
+  | "le", [a, b] => s!"({a} <= {b})"
+  | "toStr", [a] => s!"({a}.toString)"
   | "nil", [] => "Nil"
   | "cons", [h, t] => s!"({h} :: {t})"
   | "none", [] => "None"
@@ -87,15 +91,51 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "left", [a] => s!"Left({a})"
   | "right", [a] => s!"Right({a})"
   | "tuple2", [a, b] => s!"({a}, {b})"
+  | "mkTuple", args => s!"({String.intercalate ", " args})"
   | _, _ => s!"__LENS_UNKNOWN_BUILTIN_{key}__" -- deliberately un-compilable
 
-partial def renderPat : Pat → String
-  | .ctor id [] => s!"{renderQualId id}()"
-  | .ctor id args => s!"{renderQualId id}({String.intercalate ", " (args.map renderPat)})"
-  | .var n => Mangle.quoteIfKeyword n
-  | .lit l => renderLit l
-  | .wild => "_"
-  | .tuple args => s!"({String.intercalate ", " (args.map renderPat)})"
+/-- Rendered pattern plus guard conditions and pre-body `val` bindings
+(needed for `Pat.natGE` and BigInt-literal patterns, which Scala cannot
+match structurally). The `Nat` counter supplies fresh `_g<i>` names. -/
+structure PatR where
+  pat : String
+  guards : List String := []
+  binds : List String := []
+  deriving Inhabited
+
+mutual
+
+partial def renderPatEx (fresh : Nat) (p : Pat) : (PatR × Nat) :=
+  match p with
+  | .var n => ({ pat := Mangle.quoteIfKeyword n }, fresh)
+  | .wild => ({ pat := "_" }, fresh)
+  | .lit (.int v) =>
+    let g := s!"_g{fresh}"
+    ({ pat := g, guards := [s!"{g} == {v}"] }, fresh + 1)
+  | .lit l => ({ pat := renderLit l }, fresh)
+  | .natGE 0 none => ({ pat := "_" }, fresh)
+  | .natGE 0 (some x) => ({ pat := Mangle.quoteIfKeyword x }, fresh)
+  | .natGE k bind =>
+    let g := s!"_g{fresh}"
+    let binds := match bind with
+      | some x => [s!"val {Mangle.quoteIfKeyword x} = {g} - {k}"]
+      | none => []
+    ({ pat := g, guards := [s!"{g} >= {k}"], binds }, fresh + 1)
+  | .ctor id args =>
+    let (rs, fresh') := renderPatList fresh args
+    ({ pat := s!"{renderQualId id}({String.intercalate ", " (rs.map (·.pat))})"
+       guards := rs.flatMap (·.guards), binds := rs.flatMap (·.binds) }, fresh')
+  | .tuple args =>
+    let (rs, fresh') := renderPatList fresh args
+    ({ pat := s!"({String.intercalate ", " (rs.map (·.pat))})"
+       guards := rs.flatMap (·.guards), binds := rs.flatMap (·.binds) }, fresh')
+
+partial def renderPatList (fresh : Nat) (ps : List Pat) : (List PatR × Nat) :=
+  ps.foldl (init := ([], fresh)) fun (acc, f) p =>
+    let (r, f') := renderPatEx f p
+    (acc ++ [r], f')
+
+end
 
 partial def renderExpr : SExpr → String
   | .var n => Mangle.quoteIfKeyword n
@@ -113,8 +153,14 @@ partial def renderExpr : SExpr → String
     let t := match ty with | some t => s!": {renderType t}" | none => ""
     "{ val " ++ Mangle.quoteIfKeyword n ++ t ++ " = " ++ renderExpr v ++ "; " ++ renderExpr body ++ " }"
   | .matchE scrut cases =>
-    let cs := cases.map fun (p, b) => s!"case {renderPat p} => {renderExpr b}"
-    s!"({renderExpr scrut} match \{ {String.intercalate " ; " cs} })"
+    let cs := cases.map fun (p, b) =>
+      let (r, _) := renderPatEx 0 p
+      let guard := if r.guards.isEmpty then "" else s!" if {String.intercalate " && " r.guards}"
+      let body := renderExpr b
+      let body := if r.binds.isEmpty then body
+        else "{ " ++ String.intercalate "; " r.binds ++ "; " ++ body ++ " }"
+      s!"case {r.pat}{guard} => {body}"
+    s!"({renderExpr scrut} match \{\n    " ++ String.intercalate "\n    " cs ++ "\n  })"
   | .ite c t e => s!"(if {renderExpr c} then {renderExpr t} else {renderExpr e})"
   | .proj f target => s!"{renderExpr target}.{Mangle.quoteIfKeyword f}"
   | .ascribe e ty => s!"({renderExpr e}: {renderType ty})"

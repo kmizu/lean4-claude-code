@@ -4,22 +4,68 @@ package shallot.gen
 
 import shallot.rt.Prelude as RT
 
+sealed trait Color
+object Color {
+  final case class red() extends Color
+  final case class green() extends Color
+  final case class blue() extends Color
+}
+
 final case class Point(x: BigInt, y: BigInt)
+
+def Color_describe(x0: Color): String =
+  (x0 match {
+    case Color.red() => "red"
+    case Color.green() => "green"
+    case Color.blue() => "blue"
+  })
 
 def area(w: BigInt, h: BigInt): BigInt =
   (w * h)
 
+def cases: List[(String, String)] =
+  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: Nil))))))))))))))
+
 def clampSub(a: BigInt, b: BigInt): BigInt =
   RT.natSub(a, b)
 
+def describeColor(c: Color): String =
+  Color_describe(c)
+
 def divModSum(a: BigInt, b: BigInt): BigInt =
   (RT.intDiv(a, b) + RT.intMod(a, b))
+
+def fact(x0: BigInt): BigInt =
+  (x0 match {
+    case _g0 if _g0 == 0 => BigInt(1)
+    case _g0 if _g0 >= 1 => { val n = _g0 - 1; ((n + BigInt(1)) * fact(n)) }
+  })
+
+def fib(x0: BigInt): BigInt =
+  (x0 match {
+    case _g0 if _g0 == 0 => BigInt(0)
+    case _g0 if _g0 == 1 => BigInt(1)
+    case _g0 if _g0 >= 2 => { val n = _g0 - 2; (fib((n + BigInt(1))) + fib(n)) }
+  })
+
+@annotation.tailrec
+def gcd(a: BigInt, b: BigInt): BigInt =
+  (if (a == BigInt(0)) then b else gcd(RT.natMod(b, a), a))
 
 def greet(name: String): String =
   ("hello, " + name)
 
 def origin: Point =
   Point(BigInt(0), BigInt(0))
+
+def renderBool(b: Boolean): String =
+  (if (b == true) then "true" else "false")
+
+def renderInt(i: BigInt): String =
+  (i.toString)
+
+def renderNat(n: BigInt): String =
+  (n.toString)
 
 def shift(p: Point, dx: BigInt): Point =
   Point((p.x + dx), p.y)

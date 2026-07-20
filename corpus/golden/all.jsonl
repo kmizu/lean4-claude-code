@@ -1,0 +1,14 @@
+{"case":"000-nat-sub-underflow","phase":"eval","status":"ok","result":"0"}
+{"case":"001-nat-sub-normal","phase":"eval","status":"ok","result":"2"}
+{"case":"002-int-ediv-neg","phase":"eval","status":"ok","result":"-3"}
+{"case":"003-int-ediv-negdiv","phase":"eval","status":"ok","result":"-2"}
+{"case":"004-bigint-fact25","phase":"eval","status":"ok","result":"15511210043330985984000000"}
+{"case":"005-fact-10","phase":"eval","status":"ok","result":"3628800"}
+{"case":"006-fib-20","phase":"eval","status":"ok","result":"6765"}
+{"case":"007-gcd","phase":"eval","status":"ok","result":"12"}
+{"case":"008-gcd-zero","phase":"eval","status":"ok","result":"5"}
+{"case":"009-color","phase":"eval","status":"ok","result":"green"}
+{"case":"010-greet","phase":"eval","status":"ok","result":"hello, corpus"}
+{"case":"011-shift-proj","phase":"eval","status":"ok","result":"3"}
+{"case":"012-bool-true","phase":"eval","status":"ok","result":"true"}
+{"case":"013-bool-false","phase":"eval","status":"ok","result":"false"}

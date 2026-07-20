@@ -36,6 +36,9 @@ inductive Pat where
   | lit (l : Lit)
   | wild
   | tuple (args : List Pat)
+  /-- Flattened chain of `Nat.succ`: matches values `≥ k`; when `bind` is
+  `some x`, the body sees `x = scrutinee - k`. Rendered as a guard case. -/
+  | natGE (k : Nat) (bind : Option String)
   deriving Inhabited, Repr
 
 inductive SExpr where

@@ -63,10 +63,33 @@ def opTable : List (Name × OpEntry) :=
     (``Int.add, monoBinOp "add"), (``Int.mul, monoBinOp "mul"),
     (``Int.sub, monoBinOp "sub"),
     (``Int.ediv, monoBinOp "intDiv"), (``Int.emod, monoBinOp "intMod"),
-    (``String.append, monoBinOp "strAppend") ]
+    (``String.append, monoBinOp "strAppend"),
+    (``Nat.beq, monoBinOp "eq"), (``Nat.blt, monoBinOp "lt"), (``Nat.ble, monoBinOp "le"),
+    (``Nat.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
+    (``Int.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
+    (``BEq.beq, { arity := 4, typeArgIdx := 0, valueArgs := [2, 3],
+                  key := fun | .nat | .int | .bool | .str | .char => some "eq" | _ => none }) ]
 
 def findOp (n : Name) : Option OpEntry :=
   (opTable.find? (·.1 == n)).map (·.2)
+
+/-- `Decidable`-instance heads that appear as the instance argument of `ite`.
+Each is applied to exactly its two operands; anything not listed here is a
+fail-loud error (whitelisted classes only, per the extractable subset).
+Instance names pinned by `pp.explicit` probes against v4.32.0. -/
+def decInstTable : List (Name × String) :=
+  [ (``instDecidableEqBool, "eq"),
+    (``instDecidableEqNat, "eq"),
+    (``instDecidableEqString, "eq"),
+    (``Int.instDecidableEq, "eq"),
+    (``Nat.decEq, "eq"),
+    (``Nat.decLt, "lt"),
+    (``Nat.decLe, "le"),
+    (``Int.decLt, "lt"),
+    (``Int.decLe, "le") ]
+
+def findDecInst (n : Name) : Option String :=
+  (decInstTable.find? (·.1 == n)).map (·.2)
 
 /-- Builtin TYPE heads: Lean type constant → (Scala id, expected #args). -/
 def typeTable : List (Name × (MS.QualId × Nat)) :=

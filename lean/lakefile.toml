@@ -2,6 +2,9 @@ name = "shallot"
 defaultTargets = ["Shallot", "Lens"]
 testDriver = "lenstests"
 
+[leanOptions]
+autoImplicit = false
+
 [[lean_lib]]
 name = "Shallot"
 roots = ["Shallot", "Audit"]
