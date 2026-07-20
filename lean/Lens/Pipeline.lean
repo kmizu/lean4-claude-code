@@ -20,7 +20,9 @@ def defaultRoots : List Name :=
    -- M2: single-source differential case table
    `Shallot.cases,
    -- Torture regressions (review findings — must extract CORRECTLY)
-   `Shallot.cap1, `Shallot.capB, `Shallot.captureD, `Shallot.bigLit]
+   `Shallot.cap1, `Shallot.capB, `Shallot.captureD, `Shallot.bigLit,
+   -- M3: PEG interpreter (nested matchers, extractor v2)
+   `Shallot.pegRun, `Shallot.renderPeg]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

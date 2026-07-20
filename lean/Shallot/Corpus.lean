@@ -1,6 +1,7 @@
 import Shallot.Demo
 import Shallot.Render
 import Shallot.Torture
+import Shallot.Peg.Interp
 
 /-!
 # Differential corpus (single source of truth)
@@ -15,6 +16,14 @@ JSONL envelope needs no escaping.
 -/
 
 namespace Shallot
+
+/-- Toy grammar: rule 0 = `[0-9]+ !.` (digits then EOF). -/
+def digitGrammar : Grammar :=
+  { rules := [.seq (PExp.plus (.range '0' '9')) (.notP .any)], start := 0 }
+
+/-- Toy grammar: rule 0 = `"if" ![a-z]` (keyword with guard). -/
+def kwIfGrammar : Grammar :=
+  { rules := [.seq (.lit "if".toList) (.notP (.range 'a' 'z'))], start := 0 }
 
 def cases : List (String × String) :=
   [ ("000-nat-sub-underflow", renderNat (clampSub 3 5)),
@@ -35,6 +44,17 @@ def cases : List (String × String) :=
     ("100-capture-lambda",    renderNat (cap1 42)),
     ("101-capture-sanitize",  renderNat (capB 3 5)),
     ("102-capture-global",    renderNat (captureD 10)),
-    ("103-large-literal",     renderNat bigLit) ]
+    ("103-large-literal",     renderNat bigLit),
+    -- 01x: PEG interpreter through extraction
+    ("200-peg-digits-ok",     renderPeg (pegRun digitGrammar 100 (.nt 0) "123".toList)),
+    ("201-peg-digits-trail",  renderPeg (pegRun digitGrammar 100 (.nt 0) "12a".toList)),
+    ("202-peg-digits-empty",  renderPeg (pegRun digitGrammar 100 (.nt 0) "".toList)),
+    ("203-peg-missing-nt",    renderPeg (pegRun digitGrammar 100 (.nt 9) "1".toList)),
+    ("204-peg-kw-ok",         renderPeg (pegRun kwIfGrammar 100 (.nt 0) "if x".toList)),
+    ("205-peg-kw-guard",      renderPeg (pegRun kwIfGrammar 100 (.nt 0) "iffy".toList)),
+    ("206-peg-not-compose",   renderPeg (pegRun kwIfGrammar 100 (.notP (.nt 0)) "iffy".toList)),
+    ("207-peg-fuel-out",      renderPeg (pegRun digitGrammar 0 (.nt 0) "1".toList)),
+    ("208-peg-star-empty",    renderPeg (pegRun digitGrammar 100 (.star (.range '0' '9')) "abc".toList)),
+    ("209-peg-opt",           renderPeg (pegRun digitGrammar 100 (PExp.opt (.chr 'x')) "abc".toList)) ]
 
 end Shallot

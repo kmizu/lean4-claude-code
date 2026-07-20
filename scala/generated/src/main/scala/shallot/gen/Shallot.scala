@@ -11,7 +11,47 @@ object Color {
   final case class blue() extends Color
 }
 
+final case class Grammar(rules: List[PExp], start: BigInt)
+
+sealed trait Outcome
+object Outcome {
+  final case class fail() extends Outcome
+  final case class ok(t: PTree, rest: List[BigInt]) extends Outcome
+}
+
+sealed trait PExp
+object PExp {
+  final case class eps() extends PExp
+  final case class any() extends PExp
+  final case class chr(c: BigInt) extends PExp
+  final case class range(lo: BigInt, hi: BigInt) extends PExp
+  final case class lit(s: List[BigInt]) extends PExp
+  final case class nt(i: BigInt) extends PExp
+  final case class seq(e_u2081: PExp, e_u2082: PExp) extends PExp
+  final case class alt(e_u2081: PExp, e_u2082: PExp) extends PExp
+  final case class star(e: PExp) extends PExp
+  final case class notP(e: PExp) extends PExp
+}
+
+sealed trait PTree
+object PTree {
+  final case class leaf(cs: List[BigInt]) extends PTree
+  final case class nodeNT(i: BigInt, t: PTree) extends PTree
+  final case class seq(l: PTree, r: PTree) extends PTree
+  final case class choiceL(t: PTree) extends PTree
+  final case class choiceR(t: PTree) extends PTree
+  final case class starNil() extends PTree
+  final case class starCons(hd: PTree, tl: PTree) extends PTree
+  final case class notT() extends PTree
+}
+
 final case class Point(x: BigInt, y: BigInt)
+
+def Bool_and(x: Boolean, y: Boolean): Boolean =
+  (x match {
+    case false => false
+    case true => y
+  })
 
 def Color_describe(x0: Color): String =
   (x0 match {
@@ -20,11 +60,20 @@ def Color_describe(x0: Color): String =
     case Color.blue() => "blue"
   })
 
+def PExp_opt(e: PExp): PExp =
+  PExp.alt(e, PExp.eps())
+
+def PExp_plus(e: PExp): PExp =
+  PExp.seq(e, PExp.star(e))
+
 def applyF(g: (BigInt) => BigInt, n: BigInt): BigInt =
   g(n)
 
 def area(w: BigInt, h: BigInt): BigInt =
   (w * h)
+
+def beqChar(a: BigInt, b: BigInt): Boolean =
+  (a == b)
 
 def bigLit: BigInt =
   BigInt("5000000000")
@@ -45,13 +94,16 @@ def captureD(c0_1: BigInt): BigInt =
   (c0 + c0_1)
 
 def cases: List[(String, String)] =
-  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: Nil))))))))))))))))))
+  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: (("200-peg-digits-ok", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("123")))) :: (("201-peg-digits-trail", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("12a")))) :: (("202-peg-digits-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("")))) :: (("203-peg-missing-nt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(9)), RT.stringToList("1")))) :: (("204-peg-kw-ok", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("if x")))) :: (("205-peg-kw-guard", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("iffy")))) :: (("206-peg-not-compose", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.notP(PExp.nt(BigInt(0))), RT.stringToList("iffy")))) :: (("207-peg-fuel-out", renderPeg(pegRun(digitGrammar, BigInt(0), PExp.nt(BigInt(0)), RT.stringToList("1")))) :: (("208-peg-star-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39))), RT.stringToList("abc")))) :: (("209-peg-opt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp_opt(PExp.chr(BigInt(0x78))), RT.stringToList("abc")))) :: Nil))))))))))))))))))))))))))))
 
 def clampSub(a: BigInt, b: BigInt): BigInt =
   RT.natSub(a, b)
 
 def describeColor(c: Color): String =
   Color_describe(c)
+
+def digitGrammar: Grammar =
+  Grammar((PExp.seq(PExp_plus(PExp.range(BigInt(0x30), BigInt(0x39))), PExp.notP(PExp.any())) :: Nil), BigInt(0))
 
 def divModSum(a: BigInt, b: BigInt): BigInt =
   (RT.intDiv(a, b) + RT.intMod(a, b))
@@ -76,8 +128,76 @@ def gcd(a: BigInt, b: BigInt): BigInt =
 def greet(name: String): String =
   ("hello, " + name)
 
+def kwIfGrammar: Grammar =
+  Grammar((PExp.seq(PExp.lit(RT.stringToList("if")), PExp.notP(PExp.range(BigInt(0x61), BigInt(0x7a)))) :: Nil), BigInt(0))
+
+def leChar(a: BigInt, b: BigInt): Boolean =
+  (a <= b)
+
+def lenChars(x0: List[BigInt]): BigInt =
+  (x0 match {
+    case Nil => BigInt(0)
+    case (head :: rest) => (BigInt(1) + lenChars(rest))
+  })
+
 def origin: Point =
   Point(BigInt(0), BigInt(0))
+
+def pegRun(g: Grammar, x1: BigInt, x2: PExp, x3: List[BigInt]): Option[Outcome] =
+  ((x1, x2, x3) match {
+    case (_g0, x4, x5) if _g0 == BigInt(0) => None
+    case (_g0, PExp.eps(), x7) if _g0 >= 1 => { val fuel = _g0 - 1; Some(Outcome.ok(PTree.leaf(Nil), x7)) }
+    case (_g0, PExp.any(), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(Outcome.fail()) }
+    case (_g0, PExp.any(), (c :: rest)) if _g0 >= 1 => { val fuel = _g0 - 1; Some(Outcome.ok(PTree.leaf((c :: Nil)), rest)) }
+    case (_g0, PExp.chr(c), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(Outcome.fail()) }
+    case (_g0, PExp.chr(c), (c_1 :: rest)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (beqChar(c, c_1) == true) then Some(Outcome.ok(PTree.leaf((c_1 :: Nil)), rest)) else Some(Outcome.fail())) }
+    case (_g0, PExp.range(lo, hi), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(Outcome.fail()) }
+    case (_g0, PExp.range(lo, hi), (c :: rest)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (Bool_and(leChar(lo, c), leChar(c, hi)) == true) then Some(Outcome.ok(PTree.leaf((c :: Nil)), rest)) else Some(Outcome.fail())) }
+    case (_g0, PExp.lit(s), x28) if _g0 >= 1 => { val fuel = _g0 - 1; (stripPrefix_u3f(s, x28) match {
+    case Some(rest) => Some(Outcome.ok(PTree.leaf(s), rest))
+    case None => Some(Outcome.fail())
+  }) }
+    case (_g0, PExp.nt(i), x33) if _g0 >= 1 => { val fuel = _g0 - 1; (ruleAt(g.rules, i) match {
+    case None => Some(Outcome.fail())
+    case Some(e_p) => (pegRun(g, fuel, e_p, x33) match {
+    case Some(Outcome.ok(t, rest)) => Some(Outcome.ok(PTree.nodeNT(i, t), rest))
+    case Some(Outcome.fail()) => Some(Outcome.fail())
+    case None => None
+  })
+  }) }
+    case (_g0, PExp.seq(e_u2081, e_u2082), x43) if _g0 >= 1 => { val fuel = _g0 - 1; (pegRun(g, fuel, e_u2081, x43) match {
+    case Some(Outcome.ok(t, rest)) => (pegRun(g, fuel, e_u2082, rest) match {
+    case Some(Outcome.ok(t_1, rest_1)) => Some(Outcome.ok(PTree.seq(t, t_1), rest_1))
+    case Some(Outcome.fail()) => Some(Outcome.fail())
+    case None => None
+  })
+    case Some(Outcome.fail()) => Some(Outcome.fail())
+    case None => None
+  }) }
+    case (_g0, PExp.alt(e_u2081, e_u2082), x55) if _g0 >= 1 => { val fuel = _g0 - 1; (pegRun(g, fuel, e_u2081, x55) match {
+    case Some(Outcome.ok(t, rest)) => Some(Outcome.ok(PTree.choiceL(t), rest))
+    case Some(Outcome.fail()) => (pegRun(g, fuel, e_u2082, x55) match {
+    case Some(Outcome.ok(t, rest)) => Some(Outcome.ok(PTree.choiceR(t), rest))
+    case Some(Outcome.fail()) => Some(Outcome.fail())
+    case None => None
+  })
+    case None => None
+  }) }
+    case (_g0, PExp.star(e_1), x66) if _g0 >= 1 => { val fuel = _g0 - 1; (pegRun(g, fuel, e_1, x66) match {
+    case Some(Outcome.ok(t, rest)) => (pegRun(g, fuel, PExp.star(e_1), rest) match {
+    case Some(Outcome.ok(t_1, rest_1)) => Some(Outcome.ok(PTree.starCons(t, t_1), rest_1))
+    case Some(Outcome.fail()) => Some(Outcome.fail())
+    case None => None
+  })
+    case Some(Outcome.fail()) => Some(Outcome.ok(PTree.starNil(), x66))
+    case None => None
+  }) }
+    case (_g0, PExp.notP(e_1), x77) if _g0 >= 1 => { val fuel = _g0 - 1; (pegRun(g, fuel, e_1, x77) match {
+    case Some(Outcome.ok(t, rest)) => Some(Outcome.fail())
+    case Some(Outcome.fail()) => Some(Outcome.ok(PTree.notT(), x77))
+    case None => None
+  }) }
+  })
 
 def renderBool(b: Boolean): String =
   (if (b == true) then "true" else "false")
@@ -88,5 +208,28 @@ def renderInt(i: BigInt): String =
 def renderNat(n: BigInt): String =
   (n.toString)
 
+def renderPeg(o: Option[Outcome]): String =
+  (o match {
+    case None => "fuel"
+    case Some(Outcome.fail()) => "fail"
+    case Some(Outcome.ok(t, rest)) => ("ok+" + renderNat(lenChars(rest)))
+  })
+
+@annotation.tailrec
+def ruleAt(x0: List[PExp], x1: BigInt): Option[PExp] =
+  ((x0, x1) match {
+    case (Nil, x2) => None
+    case ((r :: tail), _g0) if _g0 == BigInt(0) => Some(r)
+    case ((head :: rs), _g0) if _g0 >= 1 => { val n = _g0 - 1; ruleAt(rs, n) }
+  })
+
 def shift(p: Point, dx: BigInt): Point =
   Point((p.x + dx), p.y)
+
+@annotation.tailrec
+def stripPrefix_u3f(x0: List[BigInt], x1: List[BigInt]): Option[List[BigInt]] =
+  ((x0, x1) match {
+    case (Nil, x2) => Some(x2)
+    case ((head :: tail), Nil) => None
+    case ((c :: cs), (d :: ds)) => (if (beqChar(c, d) == true) then stripPrefix_u3f(cs, ds) else None)
+  })

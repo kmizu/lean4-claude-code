@@ -88,6 +88,9 @@ def opTable : List (Name × OpEntry) :=
     (``Nat.beq, monoBinOp "eq"), (``Nat.blt, monoBinOp "lt"), (``Nat.ble, monoBinOp "le"),
     (``Nat.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
     (``Int.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
+    -- Char is represented as a BigInt codepoint, so toNat is the identity.
+    (``Char.toNat, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "charToNat" }),
+    (``String.toList, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "stringToList" }),
     (``BEq.beq, { arity := 4, typeArgIdx := 0, valueArgs := [2, 3],
                   key := fun | .nat | .int | .bool | .str | .char => some "eq" | _ => none,
                   instArgIdx := some 1 }) ]

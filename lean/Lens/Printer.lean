@@ -46,7 +46,7 @@ def renderLit : Lit → String
   | .str v => s!"\"{escapeString v}\""
   | .bool true => "true"
   | .bool false => "false"
-  | .char cp => s!"0x{String.ofList (Nat.toDigits 16 cp)} /* char */"
+  | .char cp => s!"BigInt(0x{String.ofList (Nat.toDigits 16 cp)})" -- codepoint representation
   | .unit => "()"
 
 /-! ## Types -/
@@ -62,7 +62,7 @@ partial def renderType : SType → String
   | .tuple es => s!"({String.intercalate ", " (es.map renderType)})"
   | .bigint => "BigInt"
   | .string => "String"
-  | .char => "Int" -- codepoint representation; a dedicated LChar arrives with the PEG milestone
+  | .char => "BigInt" -- Unicode-scalar codepoint (Scala Char is a UTF-16 unit — wrong)
   | .boolean => "Boolean"
   | .unit => "Unit"
   | .erased => "Unit"
@@ -85,6 +85,8 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "lt", [a, b] => s!"({a} < {b})"
   | "le", [a, b] => s!"({a} <= {b})"
   | "toStr", [a] => s!"({a}.toString)"
+  | "charToNat", [a] => a -- Char IS its codepoint
+  | "stringToList", [a] => s!"RT.stringToList({a})"
   | "nil", [] => "Nil"
   | "cons", [h, t] => s!"({h} :: {t})"
   | "none", [] => "None"
@@ -124,8 +126,16 @@ partial def renderPatEx (fresh : Nat) (p : Pat) : (PatR × Nat) :=
     ({ pat := g, guards := [s!"{g} >= {k}"], binds }, fresh + 1)
   | .ctor id args =>
     let (rs, fresh') := renderPatList fresh args
-    ({ pat := s!"{renderQualId id}({String.intercalate ", " (rs.map (·.pat))})"
-       guards := rs.flatMap (·.guards), binds := rs.flatMap (·.binds) }, fresh')
+    let ps := rs.map (·.pat)
+    let pat := match id, ps with
+      | ["$cons"], [h, t] => s!"({h} :: {t})"
+      | ["$nil"], [] => "Nil"
+      | ["$some"], [x] => s!"Some({x})"
+      | ["$none"], [] => "None"
+      | ["$left"], [x] => s!"Left({x})"
+      | ["$right"], [x] => s!"Right({x})"
+      | _, _ => s!"{renderQualId id}({String.intercalate ", " ps})"
+    ({ pat, guards := rs.flatMap (·.guards), binds := rs.flatMap (·.binds) }, fresh')
   | .tuple args =>
     let (rs, fresh') := renderPatList fresh args
     ({ pat := s!"({String.intercalate ", " (rs.map (·.pat))})"

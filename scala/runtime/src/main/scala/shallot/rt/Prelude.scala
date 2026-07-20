@@ -35,6 +35,19 @@ object Prelude:
   final case class LensPanic(msg: String) extends RuntimeException(msg)
   def panic[A](msg: String): A = throw LensPanic(msg)
 
+  /** Lean `String.toList`: Unicode-scalar (codepoint) decomposition.
+    * Lean `Char` extracts as a BigInt codepoint — NOT a Scala `Char`,
+    * which is a UTF-16 code unit and wrong for astral characters.
+    */
+  def stringToList(s: String): List[BigInt] =
+    s.codePoints().toArray.toList.map(BigInt(_))
+
+  /** Inverse of `stringToList`. */
+  def listToString(cs: List[BigInt]): String =
+    val sb = new java.lang.StringBuilder
+    cs.foreach(cp => sb.appendCodePoint(cp.toInt))
+    sb.toString
+
 object Stack:
   /** Run `f` on a fresh thread with an explicit stack size in MB.
     *

@@ -143,6 +143,90 @@ def ctorQualId (cv : ConstructorVal) : ExtractM MS.QualId := do
   else
     return [tyName, Mangle.mangleLast cv.name]
 
+/-! ## Patterns (shared by the equation route and matcher decomposition) -/
+
+/-- Builtin-container constructor patterns use reserved `$`-ids; the printer
+renders them as native Scala patterns (`::`/`Nil`/`Some`/`None`/…). -/
+def builtinPatId (c : Name) : Option (MS.QualId × Nat) :=
+  if c == ``List.cons then some (["$cons"], 1)
+  else if c == ``List.nil then some (["$nil"], 1)
+  else if c == ``Option.some then some (["$some"], 1)
+  else if c == ``Option.none then some (["$none"], 1)
+  else if c == ``Except.error then some (["$left"], 2)
+  else if c == ``Except.ok then some (["$right"], 2)
+  else none
+
+/-- Flatten a `Nat.succ`-chain pattern. Returns `none` if `e` isn't one. -/
+partial def flattenNatPat (ctx : TCtx) (k : Nat) (e : Expr) :
+    ExtractM (Option (MS.Pat × TCtx)) := do
+  let e := e.consumeMData
+  match e with
+  | .fvar id =>
+    if k == 0 then return none -- plain variable, handled by the caller
+    let ld ← id.getDecl
+    let (n, ctx') ← pushVar ctx id ld.userName
+    return some (.natGE k (some n), ctx')
+  | .lit (.natVal n) => return some (.lit (.int (n + k)), ctx)
+  | _ =>
+    let fn := e.getAppFn
+    let args := e.getAppArgs
+    match fn with
+    | .const ``Nat.succ _ =>
+      if h : args.size = 1 then flattenNatPat ctx (k + 1) args[0]
+      else return none
+    | .const ``Nat.zero _ =>
+      if args.isEmpty then return some (.lit (.int k), ctx) else return none
+    | .const ``OfNat.ofNat _ =>
+      if h : args.size = 3 then
+        match args[1].consumeMData with
+        | .lit (.natVal n) => return some (.lit (.int (n + k)), ctx)
+        | _ => return none
+      else return none
+    | _ => return none
+
+/-- Parse one constructor-pattern expression into a pattern, binding its
+variables capture-free. -/
+partial def parsePat (ctx : TCtx) (e : Expr) : ExtractM (MS.Pat × TCtx) := do
+  let e := e.consumeMData
+  if let some r ← flattenNatPat ctx 0 e then return r
+  match e with
+  | .fvar id =>
+    let ld ← id.getDecl
+    let (n, ctx') ← pushVar ctx id ld.userName
+    return (.var n, ctx')
+  | .lit (.natVal n) => return (.lit (.int n), ctx)
+  | .lit (.strVal s) => return (.lit (.str s), ctx)
+  | _ =>
+    let fn := e.getAppFn
+    let args := e.getAppArgs
+    match fn with
+    | .const c _ =>
+      if c == ``Bool.true && args.isEmpty then return (.lit (.bool true), ctx)
+      if c == ``Bool.false && args.isEmpty then return (.lit (.bool false), ctx)
+      let subPats (ctx : TCtx) (numParams : Nat) : ExtractM (List MS.Pat × TCtx) := do
+        let mut ctx := ctx
+        let mut pats : List MS.Pat := []
+        for i in [numParams : args.size] do
+          let (p, ctx') ← parsePat ctx args[i]!
+          ctx := ctx'
+          pats := pats ++ [p]
+        return (pats, ctx)
+      if c == ``Prod.mk && args.size == 4 then
+        let (pats, ctx) ← subPats ctx 2
+        return (.tuple pats, ctx)
+      match builtinPatId c with
+      | some (qid, numParams) =>
+        let (pats, ctx) ← subPats ctx numParams
+        return (.ctor qid pats, ctx)
+      | none =>
+      match (← getEnv).find? c with
+      | some (.ctorInfo cv) =>
+        require cv.induct
+        let (pats, ctx) ← subPats ctx cv.numParams
+        return (.ctor (← ctorQualId cv) pats, ctx)
+      | _ => err "pattern" s!"unsupported pattern head '{c}'"
+    | _ => err "pattern" "unsupported pattern shape"
+
 mutual
 
 partial def transTerm (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
@@ -203,6 +287,12 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
     else if c == ``Bool.true && args.isEmpty then return .lit (.bool true)
     else if c == ``Bool.false && args.isEmpty then return .lit (.bool false)
     else if c == ``Unit.unit && args.isEmpty then return .lit .unit
+    else if c == ``Char.ofNat then
+      if h : args.size = 1 then
+        match args[0].consumeMData with
+        | .lit (.natVal n) => return .lit (.char n)
+        | _ => err "term" "non-literal Char.ofNat (dynamic Char construction is not extractable)"
+      else err "term" "Char.ofNat arity"
     else if c == ``ite then
       if h : args.size = 5 then
         return .ite (← transDecInst ctx args[2]) (← transTerm ctx args[3]) (← transTerm ctx args[4])
@@ -230,7 +320,11 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
         return .builtin ce.key operands
       else err "term" s!"partially applied builtin constructor {c}"
     | none =>
-    -- 4. environment dispatch
+    -- 4. nested `match` (compiler-generated matcher functions)
+    if (← getMatcherInfo? c).isSome then
+      transMatcher ctx e
+    else
+    -- 5. environment dispatch
     match (← getEnv).find? c with
     | some (.ctorInfo cv) =>
       if args.size < cv.numParams + cv.numFields then
@@ -273,6 +367,73 @@ where
       for x in xs do
         if (← x.fvarId!.getDecl).type.isSort then return true
       return false
+
+/-- Decompose a matcher application (`f.match_N params motive discrs alts`)
+into a Scala `match` (extractor v2, the review-flagged risk item).
+
+Constructor identity per alternative comes from the matcher's own
+match-equations (`Match.getEquationsFor`): equation `i`'s LHS carries the
+constructor patterns in discriminant positions, and its RHS `altᵢ v₁ … v_k`
+fixes the order in which pattern variables feed the alternative — we bind
+OUR alt-lambda's binders to those pattern-variable names positionally. -/
+partial def transMatcher (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
+  let some mApp ← matchMatcherApp? e
+    | err "match" "matcher application failed to decompose"
+  let discrs ← mApp.discrs.toList.mapM (transTerm ctx)
+  let scrut : MS.SExpr := match discrs with
+    | [d] => d
+    | ds => .builtin "mkTuple" ds
+  let eqns ← Lean.Meta.Match.getEquationsFor mApp.matcherName
+  if eqns.eqnNames.size != mApp.alts.size then
+    err "match" s!"match-equation count {eqns.eqnNames.size} ≠ alt count {mApp.alts.size} (overlapping patterns land in v3)"
+  let mut cases : List (MS.Pat × MS.SExpr) := []
+  for i in [0 : mApp.alts.size] do
+    let eqnStmt := (← getConstInfo eqns.eqnNames[i]!).type
+    let (pat, argNames) ← forallTelescopeReducing eqnStmt fun _ys core => do
+      let some (_, lhs, rhs) := core.consumeMData.eq?
+        | err "match" "match equation is not an equality"
+      let lhsArgs := lhs.getAppArgs
+      if lhsArgs.size < mApp.discrs.size + mApp.alts.size then
+        err "match" "match equation LHS arity too small"
+      let discrStart := lhsArgs.size - mApp.alts.size - mApp.discrs.size
+      let mut pctx : TCtx := ctx
+      let mut pats : List MS.Pat := []
+      for j in [0 : mApp.discrs.size] do
+        let (p, pctx') ← parsePat pctx lhsArgs[discrStart + j]!
+        pctx := pctx'
+        pats := pats ++ [p]
+      let pat : MS.Pat := match pats with
+        | [p] => p
+        | ps => .tuple ps
+      -- RHS args: pattern variables, or `Unit.unit` for field-less
+      -- alternatives (the compiler gives those a unit-thunk parameter).
+      let names ← rhs.consumeMData.getAppArgs.toList.mapM fun a => do
+        match a.consumeMData with
+        | .fvar id =>
+          match pctx.vars.find? (·.1 == id) with
+          | some (_, n) => pure (some n)
+          | none => err "match" "match-equation RHS variable not bound by any pattern"
+        | .const c _ =>
+          if c == ``Unit.unit || c == ``PUnit.unit then pure none
+          else err "match" s!"unexpected constant '{c}' in match-equation RHS (overlap hypotheses land in v3)"
+        | _ => err "match" "non-variable in match-equation RHS (overlap hypotheses land in v3)"
+      pure (pat, names)
+    let altBody ← lambdaBoundedTelescope mApp.alts[i]! argNames.length fun xs body => do
+      if xs.size != argNames.length then
+        err "match" s!"alt {i} binder count {xs.size} ≠ pattern variable count {argNames.length}"
+      let mut actx := ctx
+      for (x, n?) in xs.toList.zip argNames do
+        match n? with
+        | some n => actx := { actx with vars := (x.fvarId!, n) :: actx.vars }
+        | none =>
+          -- unit-thunk binder: never referenced by the body, bind a dummy
+          let (_, actx') ← pushVar actx x.fvarId! Name.anonymous
+          actx := actx'
+      transTerm actx body
+    cases := cases ++ [(pat, altBody)]
+  let base := MS.SExpr.matchE scrut cases
+  let extra ← mApp.remaining.toList.mapM (transTerm ctx)
+  return if extra.isEmpty then base else .app base extra
 
 /-- Translate a `Decidable` instance term (the instance argument of `ite`)
 into the Boolean expression it decides. Whitelisted instances only. -/

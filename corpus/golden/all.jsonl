@@ -16,3 +16,13 @@
 {"case":"101-capture-sanitize","phase":"eval","status":"ok","result":"10"}
 {"case":"102-capture-global","phase":"eval","status":"ok","result":"15"}
 {"case":"103-large-literal","phase":"eval","status":"ok","result":"5000000000"}
+{"case":"200-peg-digits-ok","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"201-peg-digits-trail","phase":"eval","status":"ok","result":"fail"}
+{"case":"202-peg-digits-empty","phase":"eval","status":"ok","result":"fail"}
+{"case":"203-peg-missing-nt","phase":"eval","status":"ok","result":"fail"}
+{"case":"204-peg-kw-ok","phase":"eval","status":"ok","result":"ok+2"}
+{"case":"205-peg-kw-guard","phase":"eval","status":"ok","result":"fail"}
+{"case":"206-peg-not-compose","phase":"eval","status":"ok","result":"ok+4"}
+{"case":"207-peg-fuel-out","phase":"eval","status":"ok","result":"fuel"}
+{"case":"208-peg-star-empty","phase":"eval","status":"ok","result":"ok+3"}
+{"case":"209-peg-opt","phase":"eval","status":"ok","result":"ok+3"}

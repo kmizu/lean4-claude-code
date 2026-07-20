@@ -86,4 +86,9 @@ def ruleAt : List PExp → Nat → Option PExp
   | r :: _, 0 => some r
   | _ :: rs, n + 1 => ruleAt rs n
 
+/-- Monomorphic length (stdlib `List.length` is polymorphic). -/
+def lenChars : List Char → Nat
+  | [] => 0
+  | _ :: rest => 1 + lenChars rest
+
 end Shallot
