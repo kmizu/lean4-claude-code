@@ -1,0 +1,22 @@
+# Lean / Lake
+lean/.lake/
+*.olean
+*.ilean
+
+# Scala / sbt
+scala/target/
+scala/*/target/
+scala/project/target/
+scala/project/project/
+.bloop/
+.metals/
+.bsp/
+metals.sbt
+scala/.scala-build/
+
+# Harness scratch
+.out/
+
+# Editors
+.idea/
+.vscode/

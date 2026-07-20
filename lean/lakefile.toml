@@ -1,0 +1,24 @@
+name = "shallot"
+defaultTargets = ["Shallot", "Lens"]
+testDriver = "lenstests"
+
+[[lean_lib]]
+name = "Shallot"
+roots = ["Shallot", "Audit"]
+
+[[lean_lib]]
+name = "Lens"
+
+[[lean_exe]]
+name = "extract"
+root = "Lens.Main"
+supportInterpreter = true
+
+[[lean_exe]]
+name = "shallot-runner"
+root = "Runner"
+
+[[lean_exe]]
+name = "lenstests"
+root = "LensTests"
+supportInterpreter = true
