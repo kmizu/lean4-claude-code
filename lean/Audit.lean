@@ -1,4 +1,7 @@
 import Shallot.Basic
+import Shallot.Data.RBVerify
+import Shallot.Data.RBBalance
+import Shallot.Lang.TypeCheckVerify
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -41,3 +44,43 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.pegRun_complete' depends on axioms: [propext] -/
 #guard_msgs in
 #print axioms Shallot.pegRun_complete
+
+/-! ## RBMap (M6): order theory, BST invariant, model refinement, balance -/
+
+/-- info: 'Shallot.cmpStr_lt_trans' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.cmpStr_lt_trans
+
+/-- info: 'Shallot.RBNode.ordered_insert' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.RBNode.ordered_insert
+
+/-- info: 'Shallot.RBNode.find_insert' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.RBNode.find_insert
+
+/-- info: 'Shallot.RBNode.find_fromList' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.RBNode.find_fromList
+
+/-- info: 'Shallot.RBBalance.rb_insert' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.RBBalance.rb_insert
+
+/-! ## Typechecker (M6): soundness and completeness -/
+
+/-- info: 'Shallot.typecheck_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.typecheck_sound
+
+/-- info: 'Shallot.typecheck_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.typecheck_complete
+
+/-- info: 'Shallot.checkProgram_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.checkProgram_sound
+
+/-- info: 'Shallot.checkProgram_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.checkProgram_complete

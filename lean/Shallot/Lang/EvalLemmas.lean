@@ -88,10 +88,10 @@ theorem eval_evalArgs_mono (ft : RBNode FunDef) (f : Nat) :
               dsimp only at h ⊢
               cases b with
               | true =>
-                simp only [reduceIte] at h ⊢
+                simp at h ⊢
                 exact ihe env t res h
               | false =>
-                simp only [reduceIte] at h ⊢
+                simp at h ⊢
                 exact ihe env e1 res h
       | letE x bound body =>
         rw [eval.eq_def] at h ⊢
@@ -109,12 +109,14 @@ theorem eval_evalArgs_mono (ft : RBNode FunDef) (f : Nat) :
       | call fn args =>
         rw [eval.eq_def] at h ⊢
         dsimp only at h ⊢
+        -- `cases hf :` substitutes the scrutinee in the GOAL as well (it is
+        -- the same fuel-independent term there), so only `h` needs `rw`.
         cases hf : RBNode.find? ft fn with
         | none =>
-          rw [hf] at h ⊢
+          rw [hf] at h
           exact h
         | some d =>
-          rw [hf] at h ⊢
+          rw [hf] at h
           dsimp only at h ⊢
           cases ha : evalArgs ft f env args with
           | none => rw [ha] at h; simp at h
@@ -127,10 +129,10 @@ theorem eval_evalArgs_mono (ft : RBNode FunDef) (f : Nat) :
               dsimp only at h ⊢
               cases hb : bindParams d.params vs with
               | none =>
-                rw [hb] at h ⊢
+                rw [hb] at h
                 exact h
               | some env' =>
-                rw [hb] at h ⊢
+                rw [hb] at h
                 exact ihe env' d.body res h
     · intro env as res h
       cases as with
