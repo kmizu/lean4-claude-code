@@ -29,8 +29,8 @@ partial def flattenNatPat (ctx : TCtx) (k : Nat) (e : Expr) :
   | .fvar id =>
     if k == 0 then return none -- plain variable, handled by the caller
     let ld ← id.getDecl
-    let n := Mangle.binderName ld.userName (← freshName)
-    return some (.natGE k (some n), { ctx with vars := (id, n) :: ctx.vars })
+    let (n, ctx') ← pushVar ctx id ld.userName
+    return some (.natGE k (some n), ctx')
   | .lit (.natVal n) => return some (.lit (.int (n + k)), ctx)
   | _ =>
     let fn := e.getAppFn
@@ -56,8 +56,8 @@ partial def parsePat (ctx : TCtx) (e : Expr) : ExtractM (MS.Pat × TCtx) := do
   match e with
   | .fvar id =>
     let ld ← id.getDecl
-    let n := Mangle.binderName ld.userName (← freshName)
-    return (.var n, { ctx with vars := (id, n) :: ctx.vars })
+    let (n, ctx') ← pushVar ctx id ld.userName
+    return (.var n, ctx')
   | .lit (.natVal n) => return (.lit (.int n), ctx)
   | .lit (.strVal s) => return (.lit (.str s), ctx)
   | _ =>
@@ -145,13 +145,15 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
   forallTelescopeReducing dv.type fun xs ret => do
     if xs.size != nArgs then
       err "eqns" s!"equation arity {nArgs} ≠ signature arity {xs.size} (packed args land in v3)"
+    let mut sigCtx : TCtx := {}
     let mut sigNames : Array String := #[]
     let mut params : List (String × MS.SType) := []
     for x in xs do
       let ld ← x.fvarId!.getDecl
       if ld.type.isSort then err "eqns" "polymorphic recursive def (lands in v2)"
       if ← Meta.isProp ld.type then err "eqns" "Prop parameter in recursive def"
-      let n := Mangle.binderName ld.userName (← freshName)
+      let (n, sigCtx') ← pushVar sigCtx x.fvarId! ld.userName
+      sigCtx := sigCtx'
       sigNames := sigNames.push n
       params := params ++ [(n, ← transType [] ld.type)]
     let retTy ← transType [] ret
@@ -184,7 +186,8 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
           | err "eqns" "equation statement is not an equality"
         let lhsArgs := lhs.getAppArgs
         if lhsArgs.size != nArgs then err "eqns" "equation LHS arity mismatch"
-        let mut ctx : TCtx := {}
+        -- Pattern variables must not collide with pass-through signature names.
+        let mut ctx : TCtx := { reserved := sigNames.toList }
         let mut pats : List MS.Pat := []
         for i in [0 : nArgs] do
           let a := lhsArgs[i]!.consumeMData

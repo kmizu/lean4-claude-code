@@ -12,3 +12,7 @@
 {"case":"011-shift-proj","phase":"eval","status":"ok","result":"3"}
 {"case":"012-bool-true","phase":"eval","status":"ok","result":"true"}
 {"case":"013-bool-false","phase":"eval","status":"ok","result":"false"}
+{"case":"100-capture-lambda","phase":"eval","status":"ok","result":"42"}
+{"case":"101-capture-sanitize","phase":"eval","status":"ok","result":"10"}
+{"case":"102-capture-global","phase":"eval","status":"ok","result":"15"}
+{"case":"103-large-literal","phase":"eval","status":"ok","result":"5000000000"}

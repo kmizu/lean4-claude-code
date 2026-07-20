@@ -13,7 +13,11 @@ for f in lean/Shallot.lean lean/Lens.lean lean/Audit.lean lean/Runner.lean lean/
   [ -f "$f" ] && targets+=("$f")
 done
 
-hits=$(grep -rnE '\b(sorry|admit|native_decide)\b|^[[:space:]]*axiom[[:space:]]' "${targets[@]}" 2>/dev/null || true)
+# Patterns (hardened per review): sorryAx and `decide +native` bypasses, and
+# `axiom` DECLARATIONS including behind modifiers (`private axiom` etc.).
+# Line-anchored so prose mentions of the word in comments don't trip it.
+# lean/Audit.lean's `#guard_msgs in #print axioms` remains the semantic gate.
+hits=$(grep -rnE '\b(sorry|sorryAx|admit|native_decide)\b|^[[:space:]]*((private|protected|public|unsafe|noncomputable|scoped|local)[[:space:]]+)*axiom[[:space:]]|\+[[:space:]]*native\b' "${targets[@]}" 2>/dev/null || true)
 if [ -n "$hits" ]; then
   echo "audit-source: FORBIDDEN constructs found:" >&2
   echo "$hits" >&2

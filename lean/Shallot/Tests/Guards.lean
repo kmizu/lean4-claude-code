@@ -1,4 +1,5 @@
 import Shallot.Demo
+import Shallot.Peg.Interp
 
 /-!
 # Semantics guards
@@ -42,5 +43,36 @@ namespace Shallot
 #guard gcd 0 5 = 5
 #guard gcd 17 5 = 1
 #guard describeColor .green = "green"
+
+/-! ## PEG interpreter smoke tests (M3)
+
+Toy grammar: rule 0 = `[0-9]+ !.` (digits then EOF), rule 1 = keyword guard
+`"if" !IdCont`. Exercises range, plus (seq+star), not-predicate, lit, nt. -/
+
+private def digitG : Grammar :=
+  { rules := [.seq (PExp.plus (.range '0' '9')) (.notP .any)], start := 0 }
+
+private def isOk (o : Option Outcome) : Bool :=
+  match o with
+  | some (.ok _ _) => true
+  | _ => false
+
+private def isFail (o : Option Outcome) : Bool :=
+  match o with
+  | some .fail => true
+  | _ => false
+
+#guard isOk (pegRun digitG 100 (.nt 0) "123".toList)
+#guard isFail (pegRun digitG 100 (.nt 0) "12a".toList)
+#guard isFail (pegRun digitG 100 (.nt 0) "".toList)
+#guard isFail (pegRun digitG 100 (.nt 1) "123".toList)  -- missing nonterminal
+
+private def kwIfG : Grammar :=
+  { rules := [.seq (.lit "if".toList) (.notP (.range 'a' 'z'))], start := 0 }
+
+#guard isOk (pegRun kwIfG 100 (.nt 0) "if x".toList)
+#guard isFail (pegRun kwIfG 100 (.nt 0) "iffy".toList)  -- not-predicate kills it
+#guard isOk (pegRun kwIfG 100 (.notP (.nt 0)) "iffy".toList)  -- and &/! compose
+#guard (pegRun digitG 0 (.nt 0) "1".toList) = none  -- fuel exhaustion is `none`
 
 end Shallot

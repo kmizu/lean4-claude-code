@@ -18,7 +18,9 @@ def defaultRoots : List Name :=
    `Shallot.fact, `Shallot.fib, `Shallot.gcd, `Shallot.describeColor,
    `Shallot.renderNat, `Shallot.renderInt, `Shallot.renderBool,
    -- M2: single-source differential case table
-   `Shallot.cases]
+   `Shallot.cases,
+   -- Torture regressions (review findings — must extract CORRECTLY)
+   `Shallot.cap1, `Shallot.capB, `Shallot.captureD, `Shallot.bigLit]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

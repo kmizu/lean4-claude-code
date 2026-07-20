@@ -1,5 +1,9 @@
 import Shallot.Basic
 import Shallot.Demo
 import Shallot.Render
+import Shallot.Torture
 import Shallot.Corpus
+import Shallot.Peg.Syntax
+import Shallot.Peg.Semantics
+import Shallot.Peg.Interp
 import Shallot.Tests.Guards

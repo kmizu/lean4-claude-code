@@ -39,14 +39,34 @@ structure OpEntry where
   typeArgIdx : Nat
   valueArgs : List Nat
   key : Kind → Option String
+  /-- Position of the elaborated instance argument, validated against
+  `canonicalInsts` (review finding: dispatch must not be instance-blind —
+  a custom `HAdd Nat Nat Nat` instance must NOT silently get `+`). -/
+  instArgIdx : Option Nat := none
 
 /-- `HAdd.hAdd : {α β γ} → [inst] → α → β → γ` and friends. -/
 def hetBinOp (key : Kind → Option String) : OpEntry :=
-  { arity := 6, typeArgIdx := 0, valueArgs := [4, 5], key }
+  { arity := 6, typeArgIdx := 0, valueArgs := [4, 5], key, instArgIdx := some 3 }
 
-/-- Plain `Nat.add : Nat → Nat → Nat`-style entry. -/
+/-- Plain `Nat.add : Nat → Nat → Nat`-style entry (no instance argument). -/
 def monoBinOp (k : String) : OpEntry :=
   { arity := 2, typeArgIdx := 0, valueArgs := [0, 1], key := fun _ => some k }
+
+/-- Constants allowed to appear inside a whitelisted operator's instance
+argument (canonical core instances only; names probed against v4.32.0). -/
+def canonicalInsts : List Name :=
+  [``instHAdd, ``instHSub, ``instHMul, ``instHDiv, ``instHMod,
+   ``instHAppendOfAppend,
+   ``instAddNat, ``instSubNat, ``instMulNat, ``Nat.instDiv, ``Nat.instMod,
+   ``Int.instAdd, ``Int.instSub, ``Int.instMul, ``Int.instDiv, ``Int.instMod,
+   ``Int.instNegInt, ``instAppendString,
+   ``instOfNatNat, ``instOfNat,
+   ``instBEqOfDecidableEq, ``instDecidableEqNat, ``instDecidableEqBool,
+   ``instDecidableEqString, ``Int.instDecidableEq, ``Nat.decEq,
+   ``Nat, ``Int, ``String, ``Bool, ``Char, ``OfNat]
+
+def isCanonicalInst (e : Lean.Expr) : Bool :=
+  e.getUsedConstants.all canonicalInsts.contains
 
 def opTable : List (Name × OpEntry) :=
   [ (``HAdd.hAdd, hetBinOp fun | .nat | .int => some "add" | _ => none),
@@ -56,7 +76,8 @@ def opTable : List (Name × OpEntry) :=
     (``HMod.hMod, hetBinOp fun | .nat => some "natMod" | .int => some "intMod" | _ => none),
     (``HAppend.hAppend, hetBinOp fun | .str => some "strAppend" | _ => none),
     (``Neg.neg, { arity := 3, typeArgIdx := 0, valueArgs := [2],
-                  key := fun | .int => some "neg" | _ => none }),
+                  key := fun | .int => some "neg" | _ => none,
+                  instArgIdx := some 1 }),
     (``Nat.add, monoBinOp "add"), (``Nat.mul, monoBinOp "mul"),
     (``Nat.sub, monoBinOp "natSub"), (``Nat.div, monoBinOp "natDiv"),
     (``Nat.mod, monoBinOp "natMod"),
@@ -68,7 +89,8 @@ def opTable : List (Name × OpEntry) :=
     (``Nat.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
     (``Int.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
     (``BEq.beq, { arity := 4, typeArgIdx := 0, valueArgs := [2, 3],
-                  key := fun | .nat | .int | .bool | .str | .char => some "eq" | _ => none }) ]
+                  key := fun | .nat | .int | .bool | .str | .char => some "eq" | _ => none,
+                  instArgIdx := some 1 }) ]
 
 def findOp (n : Name) : Option OpEntry :=
   (opTable.find? (·.1 == n)).map (·.2)

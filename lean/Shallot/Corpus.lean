@@ -1,5 +1,6 @@
 import Shallot.Demo
 import Shallot.Render
+import Shallot.Torture
 
 /-!
 # Differential corpus (single source of truth)
@@ -29,6 +30,11 @@ def cases : List (String × String) :=
     ("010-greet",             greet "corpus"),
     ("011-shift-proj",        renderNat (shift origin 3).x),
     ("012-bool-true",         renderBool true),
-    ("013-bool-false",        renderBool false) ]
+    ("013-bool-false",        renderBool false),
+    -- Torture: confirmed extractor bugs, kept in the corpus forever
+    ("100-capture-lambda",    renderNat (cap1 42)),
+    ("101-capture-sanitize",  renderNat (capB 3 5)),
+    ("102-capture-global",    renderNat (captureD 10)),
+    ("103-large-literal",     renderNat bigLit) ]
 
 end Shallot

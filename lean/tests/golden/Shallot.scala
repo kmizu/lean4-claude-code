@@ -20,11 +20,32 @@ def Color_describe(x0: Color): String =
     case Color.blue() => "blue"
   })
 
+def applyF(g: (BigInt) => BigInt, n: BigInt): BigInt =
+  g(n)
+
 def area(w: BigInt, h: BigInt): BigInt =
   (w * h)
 
+def bigLit: BigInt =
+  BigInt("5000000000")
+
+def c0: BigInt =
+  BigInt(5)
+
+def cap1(x1: BigInt): BigInt =
+  applyF(((x1_1: BigInt) => x1), BigInt(0))
+
+def capB(x_p: BigInt, x1: BigInt): BigInt =
+  (x1 match {
+    case _g0 if _g0 >= 1 => { val x_p_1 = _g0 - 1; ((x_p * BigInt(2)) + x_p_1) }
+    case _g0 if _g0 == BigInt(0) => x_p
+  })
+
+def captureD(c0_1: BigInt): BigInt =
+  (c0 + c0_1)
+
 def cases: List[(String, String)] =
-  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: Nil))))))))))))))
+  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: Nil))))))))))))))))))
 
 def clampSub(a: BigInt, b: BigInt): BigInt =
   RT.natSub(a, b)
@@ -37,14 +58,14 @@ def divModSum(a: BigInt, b: BigInt): BigInt =
 
 def fact(x0: BigInt): BigInt =
   (x0 match {
-    case _g0 if _g0 == 0 => BigInt(1)
+    case _g0 if _g0 == BigInt(0) => BigInt(1)
     case _g0 if _g0 >= 1 => { val n = _g0 - 1; ((n + BigInt(1)) * fact(n)) }
   })
 
 def fib(x0: BigInt): BigInt =
   (x0 match {
-    case _g0 if _g0 == 0 => BigInt(0)
-    case _g0 if _g0 == 1 => BigInt(1)
+    case _g0 if _g0 == BigInt(0) => BigInt(0)
+    case _g0 if _g0 == BigInt(1) => BigInt(1)
     case _g0 if _g0 >= 2 => { val n = _g0 - 2; (fib((n + BigInt(1))) + fib(n)) }
   })
 

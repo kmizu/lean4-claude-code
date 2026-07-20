@@ -39,8 +39,9 @@ def escapeString (s : String) : String :=
 
 def renderLit : Lit → String
   | .int v =>
-    if v < 0 then s!"BigInt({v})"
-    else if v ≤ 0x3FFFFFFFFFFFFFFF then s!"BigInt({v})"
+    -- Raw Scala integer literals are Int-sized; anything outside goes
+    -- through the (always safe) string constructor (review finding).
+    if v ≥ -2147483648 && v ≤ 2147483647 then s!"BigInt({v})"
     else s!"BigInt(\"{v}\")"
   | .str v => s!"\"{escapeString v}\""
   | .bool true => "true"
@@ -111,7 +112,7 @@ partial def renderPatEx (fresh : Nat) (p : Pat) : (PatR × Nat) :=
   | .wild => ({ pat := "_" }, fresh)
   | .lit (.int v) =>
     let g := s!"_g{fresh}"
-    ({ pat := g, guards := [s!"{g} == {v}"] }, fresh + 1)
+    ({ pat := g, guards := [s!"{g} == {renderLit (.int v)}"] }, fresh + 1)
   | .lit l => ({ pat := renderLit l }, fresh)
   | .natGE 0 none => ({ pat := "_" }, fresh)
   | .natGE 0 (some x) => ({ pat := Mangle.quoteIfKeyword x }, fresh)

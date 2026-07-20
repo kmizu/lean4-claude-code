@@ -112,6 +112,27 @@ def transInductive (iv : InductiveVal) : ExtractM Unit := do
 structure TCtx where
   tvars : List (FVarId × String) := []
   vars : List (FVarId × String) := []
+  /-- Names that locals must not collide with (e.g. signature parameter
+  names when translating equation RHSs). -/
+  reserved : List String := []
+
+def TCtx.hasName (ctx : TCtx) (s : String) : Bool :=
+  ctx.reserved.contains s || ctx.vars.any (·.2 == s) || ctx.tvars.any (·.2 == s)
+
+/-- Pick a name not already bound in scope (capture avoidance, review
+finding #1: distinct Lean binders must never conflate to one Scala name). -/
+partial def pickName (ctx : TCtx) (base : String) : String :=
+  if !ctx.hasName base then base else go 1
+where
+  go (i : Nat) : String :=
+    let cand := s!"{base}_{i}"
+    if ctx.hasName cand then go (i + 1) else cand
+
+/-- Bind a local variable with a collision-free name. -/
+def pushVar (ctx : TCtx) (id : FVarId) (userName : Name) : ExtractM (String × TCtx) := do
+  let base := Mangle.binderName userName (← freshName)
+  let n := pickName ctx base
+  return (n, { ctx with vars := (id, n) :: ctx.vars })
 
 /-- Scala reference for a constructor: structures apply the case class
 directly (`Point(...)`), ADT ctors live in the companion (`Color.red(...)`). -/
@@ -140,16 +161,15 @@ partial def transTerm (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
         let ld ← x.fvarId!.getDecl
         if ld.type.isSort then err "term" "type-lambda (polymorphism lands in v1)"
         if ← Meta.isProp ld.type then err "term" "proof-lambda in executable code"
-        let n := Mangle.binderName ld.userName (← freshName)
-        ctx := { ctx with vars := (x.fvarId!, n) :: ctx.vars }
+        let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
+        ctx := ctx'
         params := params ++ [(n, ← transType ctx.tvars ld.type)]
       return .lam params (← transTerm ctx body)
   | .letE nm t v b _ =>
     let v' ← transTerm ctx v
     let t' ← transType ctx.tvars t
     withLetDecl nm t v fun fv => do
-      let n := Mangle.binderName nm (← freshName)
-      let ctx := { ctx with vars := (fv.fvarId!, n) :: ctx.vars }
+      let (n, ctx) ← pushVar ctx fv.fvarId! nm
       return .letE n (some t') v' (← transTerm ctx (b.instantiate1 fv))
   | .proj tyName idx s =>
     let some si := getStructureInfo? (← getEnv) tyName
@@ -171,6 +191,8 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
     -- 1. literal folding
     if c == ``OfNat.ofNat then
       if h : args.size = 3 then
+        if !Builtins.isCanonicalInst args[2] then
+          err "term" s!"non-canonical OfNat instance — custom numeral semantics are not extractable"
         match args[1].consumeMData with
         | .lit (.natVal n) =>
           match Builtins.kindOf args[0] with
@@ -194,6 +216,9 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       else
         let some key := entry.key (Builtins.kindOf args[entry.typeArgIdx]!)
           | err "term" s!"operator {c} at unsupported operand type"
+        if let some ii := entry.instArgIdx then
+          if !Builtins.isCanonicalInst args[ii]! then
+            err "term" s!"non-canonical instance for operator {c} — only core instances get builtin semantics"
         let operands ← entry.valueArgs.mapM fun i => transTerm ctx args[i]!
         return mkApp' (.builtin key operands) (← (args.toList.drop entry.arity).mapM (transTerm ctx))
     | none =>
@@ -289,8 +314,8 @@ def transDef (dv : DefinitionVal) : ExtractM Unit := do
         err "def" "polymorphic definition (lands in v1)"
       if ← Meta.isProp ld.type then
         err "def" "Prop parameter in extracted definition"
-      let n := Mangle.binderName ld.userName (← freshName)
-      ctx := { ctx with vars := (x.fvarId!, n) :: ctx.vars }
+      let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
+      ctx := ctx'
       params := params ++ [(n, ← transType ctx.tvars ld.type)]
     let retTy ← transType ctx.tvars ret
     let body := (mkAppN dv.value xs).headBeta

@@ -5,8 +5,8 @@ import Shallot.Basic
 
 Every flagship theorem must depend on nothing beyond the standard axioms
 (`propext`, `Classical.choice`, `Quot.sound`) — ideally fewer. `#guard_msgs`
-turns any drift (a stray axiom, `sorryAx`) into a **build failure**, so
-`lake build` itself is the audit.
+turns any drift (a stray axiom or unproven hole) into a **build failure**,
+so `lake build` itself is the audit.
 
 Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 -/
