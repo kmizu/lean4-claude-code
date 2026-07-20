@@ -2,6 +2,8 @@ import Shallot.Basic
 import Shallot.Data.RBVerify
 import Shallot.Data.RBBalance
 import Shallot.Lang.TypeCheckVerify
+import Shallot.Lang.EvalLemmas
+import Shallot.Opt.ConstFoldVerify
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -84,3 +86,17 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.checkProgram_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.checkProgram_complete
+
+/-! ## Interpreter + optimizer (M8, part 1): L4, O1, O2 -/
+
+/-- info: 'Shallot.eval_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.eval_mono
+
+/-- info: 'Shallot.optExpr_hasType' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.optExpr_hasType
+
+/-- info: 'Shallot.optExpr_eval' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.optExpr_eval
