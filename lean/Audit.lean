@@ -4,6 +4,7 @@ import Shallot.Data.RBBalance
 import Shallot.Lang.TypeCheckVerify
 import Shallot.Lang.EvalLemmas
 import Shallot.Opt.ConstFoldVerify
+import Shallot.Lang.TypeSound
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -100,3 +101,17 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.optExpr_eval' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.optExpr_eval
+
+/-! ## Type soundness + program-level optimizer preservation (M8, part 2) -/
+
+/-- info: 'Shallot.eval_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.eval_sound
+
+/-- info: 'Shallot.runProgram_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.runProgram_sound
+
+/-- info: 'Shallot.optProgram_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.optProgram_run
