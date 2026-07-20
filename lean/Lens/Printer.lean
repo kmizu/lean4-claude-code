@@ -87,6 +87,7 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "le", [a, b] => s!"({a} <= {b})"
   | "toStr", [a] => s!"({a}.toString)"
   | "charToNat", [a] => a -- Char IS its codepoint
+  | "charOfNat", [a] => a
   | "stringToList", [a] => s!"RT.stringToList({a})"
   | "nil", [] => "Nil"
   | "cons", [h, t] => s!"({h} :: {t})"

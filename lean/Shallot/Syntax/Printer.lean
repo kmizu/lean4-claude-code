@@ -16,6 +16,19 @@ Machine-oriented canonical form (pretty-printing is widening item W4):
 
 namespace Shallot
 
+/-- Own decimal digits (fuel = value bound): `Nat.repr` is an extraction
+BUILTIN whose inverse cannot be reasoned about — this one has equations,
+and `digitsVal_natDigits` (roundtrip layer 1) proves the inverse. -/
+def natDigitsGo : Nat → Nat → List Char → List Char
+  | 0, _, acc => acc
+  | fuel + 1, n, acc =>
+    let d := Char.ofNat ('0'.toNat + n % 10)
+    if n < 10 then d :: acc else natDigitsGo fuel (n / 10) (d :: acc)
+
+def natDigits (n : Nat) : List Char := natDigitsGo (n + 1) n []
+
+def printNat (n : Nat) : String := String.ofList (natDigits n)
+
 def printTy : Ty → String
   | .int => "int "
   | .bool => "bool "
@@ -40,8 +53,8 @@ def printBinOp : BinOp → String
 mutual
   def printExpr : Expr → String
     | .intLit n =>
-      if n < 0 then "( - " ++ renderNat n.natAbs ++ " ) "
-      else renderNat n.natAbs ++ " "
+      if n < 0 then "( - " ++ printNat n.natAbs ++ " ) "
+      else printNat n.natAbs ++ " "
     | .boolLit true => "true "
     | .boolLit false => "false "
     | .var x => x ++ " "

@@ -22,4 +22,5 @@ import Shallot.Vm.Compile
 import Shallot.Syntax.Grammar
 import Shallot.Syntax.Printer
 import Shallot.Syntax.TreeToAst
+import Shallot.Syntax.Canon
 import Shallot.Tests.Guards

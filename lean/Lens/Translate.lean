@@ -309,7 +309,7 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       if h : args.size = 1 then
         match args[0].consumeMData with
         | .lit (.natVal n) => return .lit (.char n)
-        | _ => err "term" "non-literal Char.ofNat (dynamic Char construction is not extractable)"
+        | a => return .builtin "charOfNat" [← transTerm ctx a] -- identity at BigInt codepoints
       else err "term" "Char.ofNat arity"
     else if c == ``ite then
       if h : args.size = 5 then

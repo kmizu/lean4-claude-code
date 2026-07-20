@@ -842,6 +842,16 @@ def mulOf(x0: PTree): Either[ParseErr, Expr] =
     case x5 => Left(ParseErr.shape())
   })
 
+def natDigits(n: BigInt): List[BigInt] =
+  natDigitsGo((n + BigInt(1)), n, Nil)
+
+@annotation.tailrec
+def natDigitsGo(x0: BigInt, x1: BigInt, x2: List[BigInt]): List[BigInt] =
+  (x0 match {
+    case _g0 if _g0 == BigInt(0) => x2
+    case _g0 if _g0 >= 1 => { val fuel = _g0 - 1; (if (x1 < BigInt(10)) then ((BigInt(0x30) + RT.natMod(x1, BigInt(10))) :: x2) else natDigitsGo(fuel, RT.natDiv(x1, BigInt(10)), ((BigInt(0x30) + RT.natMod(x1, BigInt(10))) :: x2))) }
+  })
+
 def numberVal(x0: PTree): Either[ParseErr, BigInt] =
   (x0 match {
     case PTree.seq(core, r) => Right(digitsVal(PTree_chars(core)))
@@ -1011,7 +1021,7 @@ def printBinOp(x0: BinOp): String =
 
 def printExpr(x0: Expr): String =
   (x0 match {
-    case Expr.intLit(n) => (if (n < BigInt(0)) then (("( - " + renderNat((n.abs))) + " ) ") else (renderNat((n.abs)) + " "))
+    case Expr.intLit(n) => (if (n < BigInt(0)) then (("( - " + printNat((n.abs))) + " ) ") else (printNat((n.abs)) + " "))
     case Expr.boolLit(true) => "true "
     case Expr.boolLit(false) => "false "
     case Expr.`var`(x_1) => (x_1 + " ")
@@ -1030,6 +1040,9 @@ def printFuns(x0: List[FunDef]): String =
     case Nil => ""
     case (d :: rest) => (printFun(d) + printFuns(rest))
   })
+
+def printNat(n: BigInt): String =
+  RT.listToString(natDigits(n))
 
 def printParams(x0: List[(String, Ty)]): String =
   (x0 match {
