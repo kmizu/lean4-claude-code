@@ -44,16 +44,16 @@
 | `eval_mono` / `_le` (L4) | インタプリタ燃料単調性 |
 | `optExpr_hasType` (O1) | 定数畳み込みは型を保存 |
 | `optExpr_eval` (O2) | 定数畳み込みは評価結果を保存（同一燃料） |
-| L5 型健全性 | well-typed ⇒ stuck しない（divByZero のみ許容）— 証明中 |
-| O3 | プログラムレベル最適化保存 — 証明中 |
+| `eval_sound` / `runProgram_sound` (L5) | **well-typed ⇒ stuck しない**（divByZero のみ許容、stuck系エラーは証明済み不在） |
+| `optProgram_run` (O3) | プログラム全体の畳み込みが結果を保存（最適化テーブル対応の再帰納） |
 
 ## コンパイラ・VM（M10）
 
 | 定理 | 内容 |
 |------|------|
-| V0 | VM 燃料単調性・コード連接合成・テーブル橋 — 証明中 |
-| V1 | 式レベル前進シミュレーション — 証明中 |
-| V2 | `runProgram` 成功値 ⇒ `vmRunProgram` 同値 — 証明中 |
+| `vmRun_mono` / append 合成 / テーブル橋 (V0) | VM 基盤（naive な append 成功形は**偽**——bind/unbind が locals を動かす。反例発見の上、誤差なしの形で証明） |
+| `compile_sim_cont` / `compile_sim` (V1) | **継続渡し形式の前進シミュレーション**（コンパイル済みコードの bind/unbind 平衡性を利用、call ケース込みフルスコープ） |
+| `compile_correct` (V2) | **`runProgram` が値 v で成功 ⇒ `vmRunProgram` も同じ v で成功** |
 
 ## パーサ roundtrip（M11）
 
