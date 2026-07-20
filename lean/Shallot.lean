@@ -17,4 +17,6 @@ import Shallot.Lang.Typing
 import Shallot.Lang.TypeCheck
 import Shallot.Lang.Eval
 import Shallot.Opt.ConstFold
+import Shallot.Vm.Machine
+import Shallot.Vm.Compile
 import Shallot.Tests.Guards

@@ -26,7 +26,9 @@ def defaultRoots : List Name :=
    -- M5: typechecker (mutual recursion) + RBMap (polymorphic defs)
    `Shallot.checkProgram, `Shallot.renderTC, `Shallot.rbDemo,
    -- M7: interpreter + optimizer
-   `Shallot.runProgram, `Shallot.optProgram, `Shallot.renderEval]
+   `Shallot.runProgram, `Shallot.optProgram, `Shallot.renderEval,
+   -- M9: stack VM + compiler
+   `Shallot.vmRunProgram]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

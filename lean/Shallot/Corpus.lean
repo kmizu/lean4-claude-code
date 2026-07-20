@@ -5,6 +5,7 @@ import Shallot.Peg.Interp
 import Shallot.Lang.TypeCheck
 import Shallot.Lang.Eval
 import Shallot.Opt.ConstFold
+import Shallot.Vm.Compile
 import Shallot.Data.RBMap
 
 /-!
@@ -151,6 +152,13 @@ def cases : List (String × String) :=
     ("411-opt-foldy-opt",     renderEval (runProgram (optProgram foldyProg) 1000)),
     ("412-opt-fact-opt",      renderEval (runProgram (optProgram factProg) 1000)),
     -- 07x: deep recursion (stack stress on the Scala side)
-    ("420-eval-sum-20000",    renderEval (runProgram (sumProg 20000) 100000)) ]
+    ("420-eval-sum-20000",    renderEval (runProgram (sumProg 20000) 100000)),
+    -- 06x: compiled VM agrees with the interpreter (proven in M10)
+    ("500-vm-fact",           renderEval (vmRunProgram factProg 10000)),
+    ("501-vm-evenodd",        renderEval (vmRunProgram evenOddProg 10000)),
+    ("502-vm-divzero",        renderEval (vmRunProgram divZeroProg 10000)),
+    ("503-vm-foldy",          renderEval (vmRunProgram foldyProg 10000)),
+    ("504-vm-opt-fact",       renderEval (vmRunProgram (optProgram factProg) 10000)),
+    ("505-vm-sum-2000",       renderEval (vmRunProgram (sumProg 2000) 1000000)) ]
 
 end Shallot

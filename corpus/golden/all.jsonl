@@ -42,3 +42,9 @@
 {"case":"411-opt-foldy-opt","phase":"eval","status":"ok","result":"ok:30"}
 {"case":"412-opt-fact-opt","phase":"eval","status":"ok","result":"ok:120"}
 {"case":"420-eval-sum-20000","phase":"eval","status":"ok","result":"ok:200010000"}
+{"case":"500-vm-fact","phase":"eval","status":"ok","result":"ok:120"}
+{"case":"501-vm-evenodd","phase":"eval","status":"ok","result":"ok:true"}
+{"case":"502-vm-divzero","phase":"eval","status":"ok","result":"err:DivByZero"}
+{"case":"503-vm-foldy","phase":"eval","status":"ok","result":"ok:30"}
+{"case":"504-vm-opt-fact","phase":"eval","status":"ok","result":"ok:120"}
+{"case":"505-vm-sum-2000","phase":"eval","status":"ok","result":"ok:2001000"}

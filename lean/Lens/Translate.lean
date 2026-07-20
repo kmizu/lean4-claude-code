@@ -291,7 +291,7 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
     -- 1. literal folding
     if c == ``OfNat.ofNat then
       if h : args.size = 3 then
-        if !Builtins.isCanonicalInst args[2] then
+        if !Builtins.isCanonicalInst (← getEnv) args[2] then
           err "term" s!"non-canonical OfNat instance — custom numeral semantics are not extractable"
         match args[1].consumeMData with
         | .lit (.natVal n) =>
@@ -327,7 +327,7 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
         let some key := entry.key (Builtins.kindOf args[entry.typeArgIdx]!)
           | err "term" s!"operator {c} at unsupported operand type"
         if let some ii := entry.instArgIdx then
-          if !Builtins.isCanonicalInst args[ii]! then
+          if !Builtins.isCanonicalInst (← getEnv) args[ii]! then
             err "term" s!"non-canonical instance for operator {c} — only core instances get builtin semantics"
         let operands ← entry.valueArgs.mapM fun i => transTerm ctx args[i]!
         return mkApp' (.builtin key operands) (← (args.toList.drop entry.arity).mapM (transTerm ctx))

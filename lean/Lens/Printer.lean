@@ -81,6 +81,7 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "intDiv", [a, b] => s!"RT.intDiv({a}, {b})"
   | "intMod", [a, b] => s!"RT.intMod({a}, {b})"
   | "strAppend", [a, b] => s!"({a} + {b})"
+  | "listAppend", [a, b] => s!"({a} ++ {b})"
   | "eq", [a, b] => s!"({a} == {b})"
   | "lt", [a, b] => s!"({a} < {b})"
   | "le", [a, b] => s!"({a} <= {b})"

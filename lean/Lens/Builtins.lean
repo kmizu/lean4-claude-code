@@ -19,7 +19,7 @@ open Lean
 
 /-- Coarse type discriminator for dispatching heterogeneous ops. -/
 inductive Kind where
-  | nat | int | str | bool | char | other
+  | nat | int | str | bool | char | list | other
   deriving Inhabited, BEq
 
 def kindOf (t : Expr) : Kind :=
@@ -29,6 +29,7 @@ def kindOf (t : Expr) : Kind :=
   | .const ``String _ => .str
   | .const ``Bool _ => .bool
   | .const ``Char _ => .char
+  | .const ``List _ => .list
   | _ => .other
 
 /-- Heterogeneous-operator entry: `arity` counts ALL elaborated args
@@ -59,14 +60,22 @@ def canonicalInsts : List Name :=
    ``instHAppendOfAppend,
    ``instAddNat, ``instSubNat, ``instMulNat, ``Nat.instDiv, ``Nat.instMod,
    ``Int.instAdd, ``Int.instSub, ``Int.instMul, ``Int.instDiv, ``Int.instMod,
-   ``Int.instNegInt, ``instAppendString,
+   ``Int.instNegInt, ``instAppendString, ``List.instAppend, ``List,
    ``instOfNatNat, ``instOfNat,
    ``instBEqOfDecidableEq, ``instDecidableEqNat, ``instDecidableEqBool,
    ``instDecidableEqString, ``Int.instDecidableEq, ``Nat.decEq,
    ``Nat, ``Int, ``String, ``Bool, ``Char, ``OfNat]
 
-def isCanonicalInst (e : Lean.Expr) : Bool :=
-  e.getUsedConstants.all canonicalInsts.contains
+/-- An instance term is canonical when every constant it mentions is either
+a whitelisted core instance or a mere TYPE (inductive/ctor — instance terms
+carry type arguments like `List Instr`, and user types there are harmless;
+what must never appear is an unknown instance FUNCTION). -/
+def isCanonicalInst (env : Lean.Environment) (e : Lean.Expr) : Bool :=
+  e.getUsedConstants.all fun n =>
+    canonicalInsts.contains n ||
+    (match env.find? n with
+     | some (.inductInfo _) | some (.ctorInfo _) => true
+     | _ => false)
 
 def opTable : List (Name × OpEntry) :=
   [ (``HAdd.hAdd, hetBinOp fun | .nat | .int => some "add" | _ => none),
@@ -74,7 +83,7 @@ def opTable : List (Name × OpEntry) :=
     (``HMul.hMul, hetBinOp fun | .nat | .int => some "mul" | _ => none),
     (``HDiv.hDiv, hetBinOp fun | .nat => some "natDiv" | .int => some "intDiv" | _ => none),
     (``HMod.hMod, hetBinOp fun | .nat => some "natMod" | .int => some "intMod" | _ => none),
-    (``HAppend.hAppend, hetBinOp fun | .str => some "strAppend" | _ => none),
+    (``HAppend.hAppend, hetBinOp fun | .str => some "strAppend" | .list => some "listAppend" | _ => none),
     (``Neg.neg, { arity := 3, typeArgIdx := 0, valueArgs := [2],
                   key := fun | .int => some "neg" | _ => none,
                   instArgIdx := some 1 }),

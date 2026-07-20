@@ -25,6 +25,7 @@ inductive RtErr where
   | stuckFun (f : String)
   | stuckArity (f : String)
   | stuckType
+  | stuckVM
   | divByZero
 
 def RtErr.render : RtErr → String
@@ -32,6 +33,7 @@ def RtErr.render : RtErr → String
   | .stuckFun f => "StuckFun:" ++ f
   | .stuckArity f => "StuckArity:" ++ f
   | .stuckType => "StuckType"
+  | .stuckVM => "StuckVM"
   | .divByZero => "DivByZero"
 
 abbrev Env := List (String × Value)
