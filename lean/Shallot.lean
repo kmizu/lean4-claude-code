@@ -32,4 +32,5 @@ import Shallot.Syntax.TreeToAst
 import Shallot.Syntax.Canon
 import Shallot.Syntax.Lexemes
 import Shallot.Syntax.RoundtripExpr
+import Shallot.Syntax.Roundtrip
 import Shallot.Tests.Guards

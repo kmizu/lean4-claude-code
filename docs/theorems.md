@@ -59,11 +59,17 @@
 
 | 定理 | 内容 |
 |------|------|
-| RT-L1（`digitsVal_natDigits`・`keyword_guard_fails`・`derives_ident`・`derives_number` ほか） | 字句層の導出構築キット＋復元 ✅ |
-| RT-L2 `derives_printExpr` | 式層: 正準印字はパーズされ AST が復元される — 証明中 |
-| RT-L3 | プログラム層 roundtrip — RT-L2 後 |
-| パイプライン合成 | print → parse → check → eval の合成定理 — 最終 |
+| RT-L1（`digitsVal_natDigits`・`keyword_guard_fails`・`derives_ident`・`derives_number` ほか） | 字句層の導出構築キット＋復元 |
+| RT-L2 `derives_printExpr`（1705行） | 式層: 正準印字はパーズされ AST が復元される（tier登り＋fail-cascade） |
+| RT-L3 `derives_printProgram`（1471行） | プログラム層 roundtrip: `treeToAst t = .ok p` |
+| `parse_print` | **`parseShallot`（検証済み PEG パーサ）が正準印字から p を復元**（十分燃料すべてで） |
+| `pipeline_correct` | **合成定理**: 正準印字はパーズで p に戻り、p は well-typed、評価値は型正しく、コンパイル済み VM も同値を計算 |
 
-既知の正準形制約: `eqB` は `eqI` と同一の `"=="` に印字されるため正準印字不能
-（roundtrip は `printableB` 仮定下）。負リテラルは `( - digits )` に印字され、
-`treeToAst` が正規化して戻す（`Canon` 仮定）。
+既知の正準形制約（`printableProgB` 仮定に集約）:
+- `eqB` は `eqI` と同一の `"=="` に印字されるため正準印字不能
+- 負リテラルは `( - digits )` に印字され、`treeToAst` が正規化して戻す
+- **分離ガード `sepOkB`**: 最後の関数本体が裸の変数かつ main が `'('` 始まりの
+  組み合わせは除外——この形では PEG の優先選択 `Call / Ident` が関数境界を越えて
+  `x ( 1 + 2 )` を関数呼び出しとして貪り、パーズが壊れる。**roundtrip 証明の過程で
+  発見された本物の文法境界条件**（実パーサへの反例で検証済み。テストコーパスでは
+  未検出やった——形式検証が仕様の穴を見つけた実例）。

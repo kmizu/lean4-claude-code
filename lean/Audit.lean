@@ -6,6 +6,7 @@ import Shallot.Lang.EvalLemmas
 import Shallot.Opt.ConstFoldVerify
 import Shallot.Lang.TypeSound
 import Shallot.Vm.Correct
+import Shallot.Syntax.Roundtrip
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -130,3 +131,21 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.compile_correct' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.compile_correct
+
+/-! ## Parser roundtrip + pipeline composition (M11) — the closing theorems -/
+
+/-- info: 'Shallot.derives_printExpr' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.derives_printExpr
+
+/-- info: 'Shallot.derives_printProgram' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.derives_printProgram
+
+/-- info: 'Shallot.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.parse_print
+
+/-- info: 'Shallot.pipeline_correct' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.pipeline_correct
