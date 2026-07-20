@@ -25,6 +25,7 @@ import Shallot.Lang.EvalLemmas
 import Shallot.Lang.TypeSound
 import Shallot.Vm.Machine
 import Shallot.Vm.Compile
+import Shallot.Vm.Correct
 import Shallot.Syntax.Grammar
 import Shallot.Syntax.Printer
 import Shallot.Syntax.TreeToAst

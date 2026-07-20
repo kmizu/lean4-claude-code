@@ -5,6 +5,7 @@ import Shallot.Lang.TypeCheckVerify
 import Shallot.Lang.EvalLemmas
 import Shallot.Opt.ConstFoldVerify
 import Shallot.Lang.TypeSound
+import Shallot.Vm.Correct
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -115,3 +116,17 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.optProgram_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.optProgram_run
+
+/-! ## Compiler correctness (M10) — the flagship -/
+
+/-- info: 'Shallot.vmRun_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.vmRun_mono
+
+/-- info: 'Shallot.compile_sim' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.compile_sim
+
+/-- info: 'Shallot.compile_correct' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.compile_correct
