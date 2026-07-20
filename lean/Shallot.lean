@@ -19,4 +19,7 @@ import Shallot.Lang.Eval
 import Shallot.Opt.ConstFold
 import Shallot.Vm.Machine
 import Shallot.Vm.Compile
+import Shallot.Syntax.Grammar
+import Shallot.Syntax.Printer
+import Shallot.Syntax.TreeToAst
 import Shallot.Tests.Guards

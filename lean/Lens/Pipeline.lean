@@ -28,7 +28,9 @@ def defaultRoots : List Name :=
    -- M7: interpreter + optimizer
    `Shallot.runProgram, `Shallot.optProgram, `Shallot.renderEval,
    -- M9: stack VM + compiler
-   `Shallot.vmRunProgram]
+   `Shallot.vmRunProgram,
+   -- M11: concrete syntax (verified-PEG parse → typecheck → eval)
+   `Shallot.rtOk, `Shallot.runSource]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

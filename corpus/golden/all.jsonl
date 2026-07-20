@@ -48,3 +48,13 @@
 {"case":"503-vm-foldy","phase":"eval","status":"ok","result":"ok:30"}
 {"case":"504-vm-opt-fact","phase":"eval","status":"ok","result":"ok:120"}
 {"case":"505-vm-sum-2000","phase":"eval","status":"ok","result":"ok:2001000"}
+{"case":"600-rt-fact","phase":"eval","status":"ok","result":"true"}
+{"case":"601-rt-evenodd","phase":"eval","status":"ok","result":"true"}
+{"case":"602-rt-foldy","phase":"eval","status":"ok","result":"true"}
+{"case":"603-parse-precedence","phase":"eval","status":"ok","result":"ok:7"}
+{"case":"604-parse-parens","phase":"eval","status":"ok","result":"ok:9"}
+{"case":"605-parse-syntax-err","phase":"eval","status":"ok","result":"parse-SyntaxError"}
+{"case":"606-parse-tc-err","phase":"eval","status":"ok","result":"err:TypeMismatch"}
+{"case":"607-source-pipeline","phase":"eval","status":"ok","result":"ok:120"}
+{"case":"608-source-letif","phase":"eval","status":"ok","result":"ok:1"}
+{"case":"609-parse-no-space","phase":"eval","status":"ok","result":"ok:true"}

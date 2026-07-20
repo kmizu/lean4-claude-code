@@ -98,6 +98,13 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "mkTuple", args => s!"({String.intercalate ", " args})"
   | "fst", [a] => s!"({a}._1)"
   | "snd", [a] => s!"({a}._2)"
+  | "exceptBind", [ma, f] => s!"({ma}.flatMap({f}))"
+  | "listToString", [a] => s!"RT.listToString({a})"
+  | "intOfNat", [a] => a
+  | "intNegSucc", [a] => s!"(-({a}) - 1)"
+  | "natSucc", [a] => s!"({a} + 1)"
+  | "natZero", [] => "BigInt(0)"
+  | "intAbs", [a] => s!"({a}.abs)"
   | _, _ => s!"__LENS_UNKNOWN_BUILTIN_{key}__" -- deliberately un-compilable
 
 /-- Rendered pattern plus guard conditions and pre-body `val` bindings

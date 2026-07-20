@@ -235,6 +235,8 @@ partial def parsePat (ctx : TCtx) (e : Expr) : ExtractM (MS.Pat × TCtx) := do
       | none =>
       match (← getEnv).find? c with
       | some (.ctorInfo cv) =>
+        if Builtins.builtinReprTypes.contains cv.induct then
+          err "pattern" s!"pattern on builtin-represented constructor '{c}' — the Lean representation must not leak"
         require cv.induct
         let (pats, ctx) ← subPats ctx cv.numParams
         return (.ctor (← ctorQualId cv) pats, ctx)
@@ -317,6 +319,21 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       if h : args.size = 2 then
         transDecInst ctx args[1]
       else err "term" "unsupported decide arity"
+    -- do-notation over Except: Bind.bind → Either.flatMap, Pure.pure → Right
+    else if c == ``Bind.bind then
+      if args.size ≥ 6 then
+        if !Builtins.isCanonicalInst (← getEnv) args[1]! then
+          err "term" "Bind.bind at a non-Except monad — do-notation is whitelisted for Except only"
+        let ma ← transTerm ctx args[4]!
+        let f ← transTerm ctx args[5]!
+        return mkApp' (.builtin "exceptBind" [ma, f]) (← (args.toList.drop 6).mapM (transTerm ctx))
+      else err "term" "partially applied Bind.bind"
+    else if c == ``Pure.pure then
+      if args.size ≥ 4 then
+        if !Builtins.isCanonicalInst (← getEnv) args[1]! then
+          err "term" "Pure.pure at a non-Except monad"
+        return mkApp' (.builtin "right" [← transTerm ctx args[3]!]) (← (args.toList.drop 4).mapM (transTerm ctx))
+      else err "term" "partially applied Pure.pure"
     else
     -- 2. whitelisted operators
     match Builtins.findOp c with
@@ -347,7 +364,9 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
     -- 5. environment dispatch
     match (← getEnv).find? c with
     | some (.ctorInfo cv) =>
-      if args.size < cv.numParams + cv.numFields then
+      if Builtins.builtinReprTypes.contains cv.induct then
+        err "term" s!"constructor '{c}' of a builtin-represented type reached translation (missing ctorTable entry)"
+      else if args.size < cv.numParams + cv.numFields then
         err "term" s!"partially applied constructor {c} (eta-expansion lands in v1)"
       else
         require cv.induct

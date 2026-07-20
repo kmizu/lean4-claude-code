@@ -6,6 +6,8 @@ import Shallot.Lang.TypeCheck
 import Shallot.Lang.Eval
 import Shallot.Opt.ConstFold
 import Shallot.Vm.Compile
+import Shallot.Syntax.Printer
+import Shallot.Syntax.TreeToAst
 import Shallot.Data.RBMap
 
 /-!
@@ -94,6 +96,22 @@ def foldyProg : Program :=
                    (.binop .sub (.intLit 10) (.intLit 4)))
       (.binop .div (.intLit 1) (.intLit 0)) }
 
+/-- Empirical roundtrip: parse the canonical print, compare by re-printing. -/
+def rtOk (p : Program) : Bool :=
+  match parseShallot 1000000 (printProgram p) with
+  | .ok q => printProgram q == printProgram p
+  | .error _ => false
+
+/-- The full pipeline on a SOURCE STRING: verified-PEG parse → typecheck →
+evaluate. -/
+def runSource (src : String) : String :=
+  match parseShallot 1000000 src with
+  | .error e => "parse-" ++ e.render
+  | .ok p =>
+    match checkProgram p with
+    | .error e => "err:" ++ e.render
+    | .ok _ => renderEval (runProgram p 100000)
+
 /-- RBMap smoke sequence: fromList + find hits and misses. -/
 def rbDemo : String :=
   let t := RBNode.fromList [("b", 2), ("a", 1), ("c", 3), ("a", 10)]
@@ -159,6 +177,18 @@ def cases : List (String × String) :=
     ("502-vm-divzero",        renderEval (vmRunProgram divZeroProg 10000)),
     ("503-vm-foldy",          renderEval (vmRunProgram foldyProg 10000)),
     ("504-vm-opt-fact",       renderEval (vmRunProgram (optProgram factProg) 10000)),
-    ("505-vm-sum-2000",       renderEval (vmRunProgram (sumProg 2000) 1000000)) ]
+    ("505-vm-sum-2000",       renderEval (vmRunProgram (sumProg 2000) 1000000)),
+    -- 60x: concrete syntax — parse phase through the VERIFIED PEG parser
+    ("600-rt-fact",           renderBool (rtOk factProg)),
+    ("601-rt-evenodd",        renderBool (rtOk evenOddProg)),
+    ("602-rt-foldy",          renderBool (rtOk foldyProg)),
+    ("603-parse-precedence",  runSource "1 + 2 * 3"),
+    ("604-parse-parens",      runSource "( 1 + 2 ) * 3"),
+    ("605-parse-syntax-err",  runSource "def @@@"),
+    ("606-parse-tc-err",      runSource "1 + true"),
+    ("607-source-pipeline",
+      runSource "def fact ( n : int ) : int = if n <= 0 then 1 else n * fact ( n - 1 ) fact ( 5 )"),
+    ("608-source-letif",      runSource "let x = 10 in if x < 20 && true then x % 3 else - x"),
+    ("609-parse-no-space",    runSource "1+2*3==7") ]
 
 end Shallot

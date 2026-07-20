@@ -62,6 +62,7 @@ def canonicalInsts : List Name :=
    ``Int.instAdd, ``Int.instSub, ``Int.instMul, ``Int.instDiv, ``Int.instMod,
    ``Int.instNegInt, ``instAppendString, ``List.instAppend, ``List,
    ``instOfNatNat, ``instOfNat,
+   ``Monad.toBind, ``Applicative.toPure, ``Monad.toApplicative, ``Except.instMonad, ``Except,
    ``instBEqOfDecidableEq, ``instDecidableEqNat, ``instDecidableEqBool,
    ``instDecidableEqString, ``Int.instDecidableEq, ``Nat.decEq,
    ``Nat, ``Int, ``String, ``Bool, ``Char, ``OfNat]
@@ -95,11 +96,13 @@ def opTable : List (Name × OpEntry) :=
     (``Int.ediv, monoBinOp "intDiv"), (``Int.emod, monoBinOp "intMod"),
     (``String.append, monoBinOp "strAppend"),
     (``Nat.beq, monoBinOp "eq"), (``Nat.blt, monoBinOp "lt"), (``Nat.ble, monoBinOp "le"),
+    (``Int.natAbs, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "intAbs" }),
     (``Nat.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
     (``Int.repr, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "toStr" }),
     -- Char is represented as a BigInt codepoint, so toNat is the identity.
     (``Char.toNat, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "charToNat" }),
     (``String.toList, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "stringToList" }),
+    (``String.ofList, { arity := 1, typeArgIdx := 0, valueArgs := [0], key := fun _ => some "listToString" }),
     (``BEq.beq, { arity := 4, typeArgIdx := 0, valueArgs := [2, 3],
                   key := fun | .nat | .int | .bool | .str | .char => some "eq" | _ => none,
                   instArgIdx := some 1 }) ]
@@ -142,7 +145,12 @@ structure CtorEntry where
   key : String
 
 def ctorTable : List (Name × CtorEntry) :=
-  [ (``List.nil, ⟨1, 0, "nil"⟩),
+  [ -- Builtin-represented numeric constructors (BigInt level)
+    (``Int.ofNat, ⟨0, 1, "intOfNat"⟩),
+    (``Int.negSucc, ⟨0, 1, "intNegSucc"⟩),
+    (``Nat.succ, ⟨0, 1, "natSucc"⟩),
+    (``Nat.zero, ⟨0, 0, "natZero"⟩),
+    (``List.nil, ⟨1, 0, "nil"⟩),
     (``List.cons, ⟨1, 2, "cons"⟩),
     (``Option.none, ⟨1, 0, "none"⟩),
     (``Option.some, ⟨1, 1, "some"⟩),
@@ -152,5 +160,11 @@ def ctorTable : List (Name × CtorEntry) :=
 
 def findCtor (n : Name) : Option CtorEntry :=
   (ctorTable.find? (·.1 == n)).map (·.2)
+
+/-- Types whose Lean constructor representation must NEVER leak into
+generated code (they map to Scala builtins). Constructor patterns on them
+are fail-loud; constructor applications go through `ctorTable`. -/
+def builtinReprTypes : List Name :=
+  [``Nat, ``Int, ``Char, ``String, ``Bool, ``Unit, ``PUnit]
 
 end Lens.Builtins

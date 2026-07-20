@@ -101,6 +101,13 @@ object PTree {
   final case class notT() extends PTree
 }
 
+sealed trait ParseErr
+object ParseErr {
+  final case class fuelOut() extends ParseErr
+  final case class syntaxErr() extends ParseErr
+  final case class shape() extends ParseErr
+}
+
 final case class Point(x: BigInt, y: BigInt)
 
 final case class Program(funs: List[FunDef], main: Expr)
@@ -175,11 +182,90 @@ def List_map[A, B](f: (A) => B, l: List[A]): List[B] =
     case (head :: tail) => (f(head) :: List_map[A, B](f, tail))
   })
 
+def NT_addE: BigInt =
+  BigInt(14)
+
+def NT_andE: BigInt =
+  BigInt(12)
+
+def NT_argList: BigInt =
+  BigInt(19)
+
+def NT_call: BigInt =
+  BigInt(18)
+
+def NT_cmpE: BigInt =
+  BigInt(13)
+
+def NT_expr: BigInt =
+  BigInt(8)
+
+def NT_funDef: BigInt =
+  BigInt(5)
+
+def NT_ident: BigInt =
+  BigInt(1)
+
+def NT_ifExpr: BigInt =
+  BigInt(9)
+
+def NT_letExpr: BigInt =
+  BigInt(10)
+
+def NT_mulE: BigInt =
+  BigInt(15)
+
+def NT_number: BigInt =
+  BigInt(2)
+
+def NT_orE: BigInt =
+  BigInt(11)
+
+def NT_param: BigInt =
+  BigInt(7)
+
+def NT_params: BigInt =
+  BigInt(6)
+
+def NT_primary: BigInt =
+  BigInt(17)
+
+def NT_program: BigInt =
+  BigInt(4)
+
+def NT_spacing: BigInt =
+  BigInt(0)
+
+def NT_type_p: BigInt =
+  BigInt(3)
+
+def NT_unary: BigInt =
+  BigInt(16)
+
 def PExp_opt(e: PExp): PExp =
   PExp.alt(e, PExp.eps())
 
 def PExp_plus(e: PExp): PExp =
   PExp.seq(e, PExp.star(e))
+
+def PTree_chars(x0: PTree): List[BigInt] =
+  (x0 match {
+    case PTree.leaf(cs) => cs
+    case PTree.nodeNT(i, t) => PTree_chars(t)
+    case PTree.seq(l, r) => (PTree_chars(l) ++ PTree_chars(r))
+    case PTree.choiceL(t) => PTree_chars(t)
+    case PTree.choiceR(t) => PTree_chars(t)
+    case PTree.starNil() => Nil
+    case PTree.starCons(h, t) => (PTree_chars(h) ++ PTree_chars(t))
+    case PTree.notT() => Nil
+  })
+
+def ParseErr_render(x0: ParseErr): String =
+  (x0 match {
+    case ParseErr.fuelOut() => "FuelOut"
+    case ParseErr.syntaxErr() => "SyntaxError"
+    case ParseErr.shape() => "ShapeError"
+  })
 
 def RBNode_balance[A](c: RBColor, l: RBNode[A], k: String, v: A, r: RBNode[A]): RBNode[A] =
   ((c, l, r) match {
@@ -251,11 +337,36 @@ def TypeError_render(x0: TypeError): String =
     case TypeError.typeMismatch() => "TypeMismatch"
   })
 
+def addOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (mulOf(hdT).flatMap(((x4: Expr) => goAdd(x4, starT))))
+    case x5 => Left(ParseErr.shape())
+  })
+
+def andOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (cmpOf(hdT).flatMap(((x4: Expr) => goAnd(x4, starT))))
+    case x5 => Left(ParseErr.shape())
+  })
+
 def applyF(g: (BigInt) => BigInt, n: BigInt): BigInt =
   g(n)
 
 def area(w: BigInt, h: BigInt): BigInt =
   (w * h)
+
+def argItems(x0: PTree): Either[ParseErr, Args] =
+  (x0 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (exprOf(subT).flatMap(((x5: Expr) => (argItems(rest).flatMap(((x6: Args) => Right(Args.cons(x5, x6))))))))
+    case PTree.starNil() => Right(Args.nil())
+    case x7 => Left(ParseErr.shape())
+  })
+
+def argListOf(x0: PTree): Either[ParseErr, Args] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (exprOf(hdT).flatMap(((x4: Expr) => (argItems(starT).flatMap(((x5: Args) => Right(Args.cons(x4, x5))))))))
+    case x6 => Left(ParseErr.shape())
+  })
 
 def badArity: Program =
   Program((FunDef("id1", (("x", Ty.int()) :: Nil), Ty.int(), Expr.`var`("x")) :: Nil), Expr.call("id1", Args.nil()))
@@ -310,6 +421,21 @@ def bindParams(x0: List[(String, Ty)], x1: List[Value]): Option[List[(String, Va
 def c0: BigInt =
   BigInt(5)
 
+def callOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, it), PTree.seq(l, PTree.seq(argsOptT, r))) => (identName(it).flatMap(((f: String) => (argsOptT match {
+    case PTree.choiceR(x7) => Right(Expr.call(f, Args.nil()))
+    case PTree.choiceL(PTree.nodeNT(x8, alT)) => (argListOf(alT).flatMap(((x10: Args) => Right(Expr.call(f, x10)))))
+    case x11 => Left(ParseErr.shape())
+  }))))
+    case PTree.seq(identT, PTree.seq(l, PTree.seq(argsOptT, r))) => (Left(ParseErr.shape()).flatMap(((f: String) => (argsOptT match {
+    case PTree.choiceR(x17) => Right(Expr.call(f, Args.nil()))
+    case PTree.choiceL(PTree.nodeNT(x18, alT)) => (argListOf(alT).flatMap(((x20: Args) => Right(Expr.call(f, x20)))))
+    case x21 => Left(ParseErr.shape())
+  }))))
+    case x22 => Left(ParseErr.shape())
+  })
+
 def cap1(x1: BigInt): BigInt =
   applyF(((x1_1: BigInt) => x1), BigInt(0))
 
@@ -323,7 +449,7 @@ def captureD(c0_1: BigInt): BigInt =
   (c0 + c0_1)
 
 def cases: List[(String, String)] =
-  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: { val x3: List[(String, String)] = (("200-peg-digits-ok", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("123")))) :: (("201-peg-digits-trail", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("12a")))) :: (("202-peg-digits-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("")))) :: (("203-peg-missing-nt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(9)), RT.stringToList("1")))) :: (("204-peg-kw-ok", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("if x")))) :: (("205-peg-kw-guard", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("iffy")))) :: (("206-peg-not-compose", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.notP(PExp.nt(BigInt(0))), RT.stringToList("iffy")))) :: { val x1: List[(String, String)] = { val x0: List[(String, String)] = (("420-eval-sum-20000", renderEval(runProgram(sumProg(BigInt(20000)), BigInt(100000)))) :: (("500-vm-fact", renderEval(vmRunProgram(factProg, BigInt(10000)))) :: (("501-vm-evenodd", renderEval(vmRunProgram(evenOddProg, BigInt(10000)))) :: (("502-vm-divzero", renderEval(vmRunProgram(divZeroProg, BigInt(10000)))) :: (("503-vm-foldy", renderEval(vmRunProgram(foldyProg, BigInt(10000)))) :: (("504-vm-opt-fact", renderEval(vmRunProgram(optProgram(factProg), BigInt(10000)))) :: (("505-vm-sum-2000", renderEval(vmRunProgram(sumProg(BigInt(2000)), BigInt(1000000)))) :: Nil))))))); (("402-eval-divzero", renderEval(runProgram(divZeroProg, BigInt(1000)))) :: (("403-eval-unbound", renderEval(runProgram(badUnbound, BigInt(1000)))) :: (("404-eval-fuel", renderEval(runProgram(sumProg(BigInt(100)), BigInt(3)))) :: (("410-opt-foldy-direct", renderEval(runProgram(foldyProg, BigInt(1000)))) :: (("411-opt-foldy-opt", renderEval(runProgram(optProgram(foldyProg), BigInt(1000)))) :: (("412-opt-fact-opt", renderEval(runProgram(optProgram(factProg), BigInt(1000)))) :: x0)))))) }; { val x2: List[(String, String)] = (("320-tc-unbound", renderTC(checkProgram(badUnbound))) :: (("321-tc-mismatch", renderTC(checkProgram(badMismatch))) :: (("322-tc-unknown", renderTC(checkProgram(badUnknownFun))) :: (("323-tc-arity", renderTC(checkProgram(badArity))) :: (("400-eval-fact", renderEval(runProgram(factProg, BigInt(1000)))) :: (("401-eval-evenodd", renderEval(runProgram(evenOddProg, BigInt(1000)))) :: x1)))))); (("207-peg-fuel-out", renderPeg(pegRun(digitGrammar, BigInt(0), PExp.nt(BigInt(0)), RT.stringToList("1")))) :: (("208-peg-star-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39))), RT.stringToList("abc")))) :: (("209-peg-opt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp_opt(PExp.chr(BigInt(0x78))), RT.stringToList("abc")))) :: (("300-rbmap-find", rbDemo) :: (("310-tc-fact", renderTC(checkProgram(factProg))) :: (("311-tc-evenodd", renderTC(checkProgram(evenOddProg))) :: x2)))))) } }))))))); (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: x3)))))) }))))))))))))
+  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: { val x7: List[(String, String)] = (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: { val x6: List[(String, String)] = { val x5: List[(String, String)] = (("208-peg-star-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39))), RT.stringToList("abc")))) :: (("209-peg-opt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp_opt(PExp.chr(BigInt(0x78))), RT.stringToList("abc")))) :: (("300-rbmap-find", rbDemo) :: (("310-tc-fact", renderTC(checkProgram(factProg))) :: { val x2: List[(String, String)] = { val x1: List[(String, String)] = { val x0: List[(String, String)] = (("606-parse-tc-err", runSource("1 + true")) :: (("607-source-pipeline", runSource("def fact ( n : int ) : int = if n <= 0 then 1 else n * fact ( n - 1 ) fact ( 5 )")) :: (("608-source-letif", runSource("let x = 10 in if x < 20 && true then x % 3 else - x")) :: (("609-parse-no-space", runSource("1+2*3==7")) :: Nil)))); (("602-rt-foldy", renderBool(rtOk(foldyProg))) :: (("603-parse-precedence", runSource("1 + 2 * 3")) :: (("604-parse-parens", runSource("( 1 + 2 ) * 3")) :: (("605-parse-syntax-err", runSource("def @@@")) :: x0)))) }; (("501-vm-evenodd", renderEval(vmRunProgram(evenOddProg, BigInt(10000)))) :: (("502-vm-divzero", renderEval(vmRunProgram(divZeroProg, BigInt(10000)))) :: (("503-vm-foldy", renderEval(vmRunProgram(foldyProg, BigInt(10000)))) :: (("504-vm-opt-fact", renderEval(vmRunProgram(optProgram(factProg), BigInt(10000)))) :: (("505-vm-sum-2000", renderEval(vmRunProgram(sumProg(BigInt(2000)), BigInt(1000000)))) :: (("600-rt-fact", renderBool(rtOk(factProg))) :: (("601-rt-evenodd", renderBool(rtOk(evenOddProg))) :: x1))))))) }; { val x4: List[(String, String)] = { val x3: List[(String, String)] = (("411-opt-foldy-opt", renderEval(runProgram(optProgram(foldyProg), BigInt(1000)))) :: (("412-opt-fact-opt", renderEval(runProgram(optProgram(factProg), BigInt(1000)))) :: (("420-eval-sum-20000", renderEval(runProgram(sumProg(BigInt(20000)), BigInt(100000)))) :: (("500-vm-fact", renderEval(vmRunProgram(factProg, BigInt(10000)))) :: x2)))); (("402-eval-divzero", renderEval(runProgram(divZeroProg, BigInt(1000)))) :: (("403-eval-unbound", renderEval(runProgram(badUnbound, BigInt(1000)))) :: (("404-eval-fuel", renderEval(runProgram(sumProg(BigInt(100)), BigInt(3)))) :: (("410-opt-foldy-direct", renderEval(runProgram(foldyProg, BigInt(1000)))) :: x3)))) }; (("311-tc-evenodd", renderTC(checkProgram(evenOddProg))) :: (("320-tc-unbound", renderTC(checkProgram(badUnbound))) :: (("321-tc-mismatch", renderTC(checkProgram(badMismatch))) :: (("322-tc-unknown", renderTC(checkProgram(badUnknownFun))) :: (("323-tc-arity", renderTC(checkProgram(badArity))) :: (("400-eval-fact", renderEval(runProgram(factProg, BigInt(1000)))) :: (("401-eval-evenodd", renderEval(runProgram(evenOddProg, BigInt(1000)))) :: x4))))))) } })))); (("204-peg-kw-ok", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("if x")))) :: (("205-peg-kw-guard", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("iffy")))) :: (("206-peg-not-compose", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.notP(PExp.nt(BigInt(0))), RT.stringToList("iffy")))) :: (("207-peg-fuel-out", renderPeg(pegRun(digitGrammar, BigInt(0), PExp.nt(BigInt(0)), RT.stringToList("1")))) :: x5)))) }; (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: (("200-peg-digits-ok", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("123")))) :: (("201-peg-digits-trail", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("12a")))) :: (("202-peg-digits-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("")))) :: (("203-peg-missing-nt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(9)), RT.stringToList("1")))) :: x6))))))) })))); (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: x7)))) })))))))
 
 @annotation.tailrec
 def checkFuns(S: List[(String, (List[Ty], Ty))], x1: List[FunDef]): Either[TypeError, Unit] =
@@ -358,6 +484,16 @@ def cmpChars(x0: List[BigInt], x1: List[BigInt]): Cmp =
     case Cmp.gt() => Cmp.gt()
     case Cmp.eq() => cmpChars(as, bs)
   })
+  })
+
+def cmpOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, lT), PTree.choiceR(t)) => addOf(lT)
+    case PTree.seq(PTree.nodeNT(i, lT), PTree.choiceL(PTree.seq(PTree.choiceL(t), PTree.nodeNT(i_1, rT)))) => (Right(BinOp.le()).flatMap(((op: BinOp) => (addOf(lT).flatMap(((x10: Expr) => (addOf(rT).flatMap(((x11: Expr) => Right(Expr.binop(op, x10, x11)))))))))))
+    case PTree.seq(PTree.nodeNT(i, lT), PTree.choiceL(PTree.seq(PTree.choiceR(PTree.choiceL(t)), PTree.nodeNT(i_1, rT)))) => (Right(BinOp.lt()).flatMap(((op: BinOp) => (addOf(lT).flatMap(((x18: Expr) => (addOf(rT).flatMap(((x19: Expr) => Right(Expr.binop(op, x18, x19)))))))))))
+    case PTree.seq(PTree.nodeNT(i, lT), PTree.choiceL(PTree.seq(PTree.choiceR(PTree.choiceR(t)), PTree.nodeNT(i_1, rT)))) => (Right(BinOp.eqI()).flatMap(((op: BinOp) => (addOf(lT).flatMap(((x26: Expr) => (addOf(rT).flatMap(((x27: Expr) => Right(Expr.binop(op, x26, x27)))))))))))
+    case PTree.seq(PTree.nodeNT(i, lT), PTree.choiceL(PTree.seq(opT, PTree.nodeNT(i_1, rT)))) => (Left(ParseErr.shape()).flatMap(((op: BinOp) => (addOf(lT).flatMap(((x34: Expr) => (addOf(rT).flatMap(((x35: Expr) => Right(Expr.binop(op, x34, x35)))))))))))
+    case x36 => Left(ParseErr.shape())
   })
 
 def cmpStr(a: String, b: String): Cmp =
@@ -399,11 +535,24 @@ def describeColor(c: Color): String =
 def digitGrammar: Grammar =
   Grammar((PExp.seq(PExp_plus(PExp.range(BigInt(0x30), BigInt(0x39))), PExp.notP(PExp.any())) :: Nil), BigInt(0))
 
+def digitsVal(cs: List[BigInt]): BigInt =
+  digitsValGo(cs, BigInt(0))
+
+@annotation.tailrec
+def digitsValGo(x0: List[BigInt], x1: BigInt): BigInt =
+  (x0 match {
+    case Nil => x1
+    case (c :: rest) => digitsValGo(rest, ((x1 * BigInt(10)) + RT.natSub(c, BigInt(0x30))))
+  })
+
 def divModSum(a: BigInt, b: BigInt): BigInt =
   (RT.intDiv(a, b) + RT.intMod(a, b))
 
 def divZeroProg: Program =
   Program(Nil, Expr.binop(BinOp.div(), Expr.intLit(BigInt(7)), Expr.intLit(BigInt(0))))
+
+def eqTok: PExp =
+  PExp.seq(PExp.chr(BigInt(0x3d)), PExp.seq(PExp.notP(PExp.chr(BigInt(0x3d))), PExp.nt(NT_spacing)))
 
 def eval(ft: RBNode[FunDef], x1: BigInt, x2: List[(String, Value)], x3: Expr): Option[Either[RtErr, Value]] =
   ((x1, x3) match {
@@ -493,6 +642,14 @@ def evalUnOp(x0: UnOp, x1: Value): Either[RtErr, Value] =
 def evenOddProg: Program =
   Program((FunDef("even", (("n", Ty.int()) :: Nil), Ty.bool(), Expr.ite(Expr.binop(BinOp.eqI(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.boolLit(true), Expr.call("odd", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil())))) :: (FunDef("odd", (("n", Ty.int()) :: Nil), Ty.bool(), Expr.ite(Expr.binop(BinOp.eqI(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.boolLit(false), Expr.call("even", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil())))) :: Nil)), Expr.call("even", Args.cons(Expr.intLit(BigInt(10)), Args.nil())))
 
+def exprOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.choiceL(PTree.nodeNT(i, t)) => ifOf(t)
+    case PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, t))) => letOf(t)
+    case PTree.choiceR(PTree.choiceR(PTree.nodeNT(i, t))) => orOf(t)
+    case x7 => Left(ParseErr.shape())
+  })
+
 def fact(x0: BigInt): BigInt =
   (x0 match {
     case _g0 if _g0 == BigInt(0) => BigInt(1)
@@ -535,12 +692,79 @@ def foldUnOp(op: UnOp, e: Expr): Expr =
 def foldyProg: Program =
   Program(Nil, Expr.ite(Expr.binop(BinOp.lt(), Expr.intLit(BigInt(1)), Expr.intLit(BigInt(2))), Expr.binop(BinOp.mul(), Expr.binop(BinOp.add(), Expr.intLit(BigInt(2)), Expr.intLit(BigInt(3))), Expr.binop(BinOp.sub(), Expr.intLit(BigInt(10)), Expr.intLit(BigInt(4)))), Expr.binop(BinOp.div(), Expr.intLit(BigInt(1)), Expr.intLit(BigInt(0)))))
 
+def funDefOf(x0: PTree): Either[ParseErr, FunDef] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(PTree.nodeNT(i_2, it), PTree.seq(l_1, PTree.seq(paramsOptT, PTree.seq(l_2, PTree.seq(l_3, PTree.seq(PTree.nodeNT(i, tyT), PTree.seq(l_4, PTree.nodeNT(i_1, bodyT))))))))) => (identName(it).flatMap(((name: String) => { val x17: (List[(String, Ty)]) => Either[ParseErr, FunDef] = ((params: List[(String, Ty)]) => (typeOf(tyT).flatMap(((x15: Ty) => (exprOf(bodyT).flatMap(((x16: Expr) => Right(FunDef(name, params, x15, x16))))))))); (paramsOptT match {
+    case PTree.choiceR(x18) => (Right(Nil).flatMap(((params: List[(String, Ty)]) => x17(params))))
+    case PTree.choiceL(PTree.nodeNT(x20, alT)) => (paramsOf(alT).flatMap(((params: List[(String, Ty)]) => x17(params))))
+    case x23 => (Left(ParseErr.shape()).flatMap(((params: List[(String, Ty)]) => x17(params))))
+  }) })))
+    case PTree.seq(l, PTree.seq(identT, PTree.seq(l_1, PTree.seq(paramsOptT, PTree.seq(l_2, PTree.seq(l_3, PTree.seq(PTree.nodeNT(i, tyT), PTree.seq(l_4, PTree.nodeNT(i_1, bodyT))))))))) => (Left(ParseErr.shape()).flatMap(((name: String) => { val x40: (List[(String, Ty)]) => Either[ParseErr, FunDef] = ((params: List[(String, Ty)]) => (typeOf(tyT).flatMap(((x38: Ty) => (exprOf(bodyT).flatMap(((x39: Expr) => Right(FunDef(name, params, x38, x39))))))))); (paramsOptT match {
+    case PTree.choiceR(x41) => (Right(Nil).flatMap(((params: List[(String, Ty)]) => x40(params))))
+    case PTree.choiceL(PTree.nodeNT(x43, alT)) => (paramsOf(alT).flatMap(((params: List[(String, Ty)]) => x40(params))))
+    case x46 => (Left(ParseErr.shape()).flatMap(((params: List[(String, Ty)]) => x40(params))))
+  }) })))
+    case x48 => Left(ParseErr.shape())
+  })
+
+def funItems(x0: PTree): Either[ParseErr, List[FunDef]] =
+  (x0 match {
+    case PTree.starCons(PTree.nodeNT(i, dT), rest) => (funDefOf(dT).flatMap(((x4: FunDef) => (funItems(rest).flatMap(((x5: List[FunDef]) => Right((x4 :: x5))))))))
+    case PTree.starNil() => Right(Nil)
+    case x6 => Left(ParseErr.shape())
+  })
+
 @annotation.tailrec
 def gcd(a: BigInt, b: BigInt): BigInt =
   (if (a == BigInt(0)) then b else gcd(RT.natMod(b, a), a))
 
+def goAdd(acc: Expr, x1: PTree): Either[ParseErr, Expr] =
+  (x1 match {
+    case PTree.starCons(PTree.seq(PTree.choiceL(t), PTree.nodeNT(i, subT)), rest) => (Right(BinOp.add()).flatMap(((op: BinOp) => (mulOf(subT).flatMap(((x7: Expr) => goAdd(Expr.binop(op, acc, x7), rest)))))))
+    case PTree.starCons(PTree.seq(PTree.choiceR(t), PTree.nodeNT(i, subT)), rest) => (Right(BinOp.sub()).flatMap(((op: BinOp) => (mulOf(subT).flatMap(((x13: Expr) => goAdd(Expr.binop(op, acc, x13), rest)))))))
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (Left(ParseErr.shape()).flatMap(((op: BinOp) => (mulOf(subT).flatMap(((x19: Expr) => goAdd(Expr.binop(op, acc, x19), rest)))))))
+    case PTree.starNil() => Right(acc)
+    case x20 => Left(ParseErr.shape())
+  })
+
+def goAnd(acc: Expr, x1: PTree): Either[ParseErr, Expr] =
+  (x1 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (cmpOf(subT).flatMap(((x6: Expr) => goAnd(Expr.binop(BinOp.andB(), acc, x6), rest))))
+    case PTree.starNil() => Right(acc)
+    case x7 => Left(ParseErr.shape())
+  })
+
+def goMul(acc: Expr, x1: PTree): Either[ParseErr, Expr] =
+  (x1 match {
+    case PTree.starCons(PTree.seq(PTree.choiceL(t), PTree.nodeNT(i, subT)), rest) => (Right(BinOp.mul()).flatMap(((op: BinOp) => (unaryOf(subT).flatMap(((x7: Expr) => goMul(Expr.binop(op, acc, x7), rest)))))))
+    case PTree.starCons(PTree.seq(PTree.choiceR(PTree.choiceL(t)), PTree.nodeNT(i, subT)), rest) => (Right(BinOp.div()).flatMap(((op: BinOp) => (unaryOf(subT).flatMap(((x13: Expr) => goMul(Expr.binop(op, acc, x13), rest)))))))
+    case PTree.starCons(PTree.seq(PTree.choiceR(PTree.choiceR(t)), PTree.nodeNT(i, subT)), rest) => (Right(BinOp.mod()).flatMap(((op: BinOp) => (unaryOf(subT).flatMap(((x19: Expr) => goMul(Expr.binop(op, acc, x19), rest)))))))
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (Left(ParseErr.shape()).flatMap(((op: BinOp) => (unaryOf(subT).flatMap(((x25: Expr) => goMul(Expr.binop(op, acc, x25), rest)))))))
+    case PTree.starNil() => Right(acc)
+    case x26 => Left(ParseErr.shape())
+  })
+
+def goOr(acc: Expr, x1: PTree): Either[ParseErr, Expr] =
+  (x1 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (andOf(subT).flatMap(((x6: Expr) => goOr(Expr.binop(BinOp.orB(), acc, x6), rest))))
+    case PTree.starNil() => Right(acc)
+    case x7 => Left(ParseErr.shape())
+  })
+
 def greet(name: String): String =
   ("hello, " + name)
+
+def idContP: PExp =
+  PExp.alt(idStartP, PExp.range(BigInt(0x30), BigInt(0x39)))
+
+def idStartP: PExp =
+  PExp.alt(PExp.range(BigInt(0x61), BigInt(0x7a)), PExp.alt(PExp.range(BigInt(0x41), BigInt(0x5a)), PExp.chr(BigInt(0x5f))))
+
+def identName(x0: PTree): Either[ParseErr, String] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(core, r)) => Right(RT.listToString(PTree_chars(core)))
+    case x4 => Left(ParseErr.shape())
+  })
 
 def idxOf(x0: List[String], x1: String): Option[BigInt] =
   (x0 match {
@@ -550,6 +774,18 @@ def idxOf(x0: List[String], x1: String): Option[BigInt] =
     case None => None
   }))
   })
+
+def ifOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(PTree.nodeNT(i, cT), PTree.seq(l_1, PTree.seq(PTree.nodeNT(i_1, tT), PTree.seq(l_2, PTree.nodeNT(i_2, eT)))))) => (exprOf(cT).flatMap(((x10: Expr) => (exprOf(tT).flatMap(((x11: Expr) => (exprOf(eT).flatMap(((x12: Expr) => Right(Expr.ite(x10, x11, x12)))))))))))
+    case x13 => Left(ParseErr.shape())
+  })
+
+def keywordP: PExp =
+  PExp.alt(PExp.lit(RT.stringToList("if")), PExp.alt(PExp.lit(RT.stringToList("then")), PExp.alt(PExp.lit(RT.stringToList("else")), PExp.alt(PExp.lit(RT.stringToList("let")), PExp.alt(PExp.lit(RT.stringToList("in")), PExp.alt(PExp.lit(RT.stringToList("def")), PExp.alt(PExp.lit(RT.stringToList("true")), PExp.alt(PExp.lit(RT.stringToList("false")), PExp.alt(PExp.lit(RT.stringToList("int")), PExp.lit(RT.stringToList("bool")))))))))))
+
+def kw(s: String): PExp =
+  PExp.seq(PExp.lit(RT.stringToList(s)), PExp.seq(PExp.notP(idContP), PExp.nt(NT_spacing)))
 
 def kwIfGrammar: Grammar =
   Grammar((PExp.seq(PExp.lit(RT.stringToList("if")), PExp.notP(PExp.range(BigInt(0x61), BigInt(0x7a)))) :: Nil), BigInt(0))
@@ -561,6 +797,13 @@ def lenChars(x0: List[BigInt]): BigInt =
   (x0 match {
     case Nil => BigInt(0)
     case (head :: rest) => (BigInt(1) + lenChars(rest))
+  })
+
+def letOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(PTree.nodeNT(i_2, it), PTree.seq(l_1, PTree.seq(PTree.nodeNT(i, bT), PTree.seq(l_2, PTree.nodeNT(i_1, bodyT)))))) => (identName(it).flatMap(((x: String) => (exprOf(bT).flatMap(((x11: Expr) => (exprOf(bodyT).flatMap(((x12: Expr) => Right(Expr.letE(x, x11, x12)))))))))))
+    case PTree.seq(l, PTree.seq(identT, PTree.seq(l_1, PTree.seq(PTree.nodeNT(i, bT), PTree.seq(l_2, PTree.nodeNT(i_1, bodyT)))))) => (Left(ParseErr.shape()).flatMap(((x: String) => (exprOf(bT).flatMap(((x22: Expr) => (exprOf(bodyT).flatMap(((x23: Expr) => Right(Expr.letE(x, x22, x23)))))))))))
+    case x24 => Left(ParseErr.shape())
   })
 
 @annotation.tailrec
@@ -584,11 +827,26 @@ def lookupVal(x0: List[(String, Value)], x1: String): Option[Value] =
     case ((y, v) :: rest) => (if (beqStr(x1, y) == true) then Some(v) else lookupVal(rest, x1))
   })
 
+def ltTok: PExp =
+  PExp.seq(PExp.chr(BigInt(0x3c)), PExp.seq(PExp.notP(PExp.chr(BigInt(0x3d))), PExp.nt(NT_spacing)))
+
 def mkCodeTable(funs: List[FunDef]): RBNode[List[Instr]] =
   RBNode_fromList[List[Instr]](List_map[FunDef, (String, List[Instr])](compileFun, funs))
 
 def mkFunTable(funs: List[FunDef]): RBNode[FunDef] =
   RBNode_fromList[FunDef](List_map[FunDef, (String, FunDef)](((d: FunDef) => (d.name, d)), funs))
+
+def mulOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (unaryOf(hdT).flatMap(((x4: Expr) => goMul(x4, starT))))
+    case x5 => Left(ParseErr.shape())
+  })
+
+def numberVal(x0: PTree): Either[ParseErr, BigInt] =
+  (x0 match {
+    case PTree.seq(core, r) => Right(digitsVal(PTree_chars(core)))
+    case x3 => Left(ParseErr.shape())
+  })
 
 def optArgs(x0: Args): Args =
   (x0 match {
@@ -618,8 +876,41 @@ def optFun(d: FunDef): FunDef =
 def optProgram(p: Program): Program =
   Program(List_map[FunDef, FunDef](optFun, p.funs), optExpr(p.main))
 
+def orOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (andOf(hdT).flatMap(((x4: Expr) => goOr(x4, starT))))
+    case x5 => Left(ParseErr.shape())
+  })
+
 def origin: Point =
   Point(BigInt(0), BigInt(0))
+
+def paramItems(x0: PTree): Either[ParseErr, List[(String, Ty)]] =
+  (x0 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, subT)), rest) => (paramOf(subT).flatMap(((x5: (String, Ty)) => (paramItems(rest).flatMap(((x6: List[(String, Ty)]) => Right((x5 :: x6))))))))
+    case PTree.starNil() => Right(Nil)
+    case x7 => Left(ParseErr.shape())
+  })
+
+def paramOf(x0: PTree): Either[ParseErr, (String, Ty)] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, iT), PTree.seq(l, PTree.nodeNT(i_1, tyT))) => (identName(iT).flatMap(((x6: String) => (typeOf(tyT).flatMap(((x7: Ty) => Right((x6, x7))))))))
+    case x8 => Left(ParseErr.shape())
+  })
+
+def paramsOf(x0: PTree): Either[ParseErr, List[(String, Ty)]] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, hdT), starT) => (paramOf(hdT).flatMap(((x4: (String, Ty)) => (paramItems(starT).flatMap(((x5: List[(String, Ty)]) => Right((x4 :: x5))))))))
+    case x6 => Left(ParseErr.shape())
+  })
+
+def parseShallot(fuel: BigInt, s: String): Either[ParseErr, Program] =
+  (pegRun(shallotGrammar, fuel, PExp.nt(NT_program), RT.stringToList(s)) match {
+    case None => Left(ParseErr.fuelOut())
+    case Some(Outcome.fail()) => Left(ParseErr.syntaxErr())
+    case Some(Outcome.ok(PTree.nodeNT(x4, t), x6)) => treeToAst(t)
+    case Some(Outcome.ok(x7, x8)) => Left(ParseErr.shape())
+  })
 
 def pegRun(g: Grammar, x1: BigInt, x2: PExp, x3: List[BigInt]): Option[Outcome] =
   ((x1, x2, x3) match {
@@ -685,6 +976,83 @@ def popN(x0: BigInt, x1: List[Value], x2: List[Value]): Option[(List[Value], Lis
     case (_g0, (v :: stack)) if _g0 >= 1 => { val n = _g0 - 1; popN(n, stack, (v :: x2)) }
   })
 
+def primaryOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.choiceL(PTree.nodeNT(i, nT)) => (numberVal(nT).flatMap(((x3: BigInt) => Right(Expr.intLit(x3)))))
+    case PTree.choiceR(PTree.choiceL(t)) => Right(Expr.boolLit(true))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceL(t))) => Right(Expr.boolLit(false))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, cT))))) => callOf(cT)
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, iT)))))) => (identName(iT).flatMap(((x10: String) => Right(Expr.`var`(x10)))))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.seq(l, PTree.seq(PTree.nodeNT(i, eT), r))))))) => exprOf(eT)
+    case x15 => Left(ParseErr.shape())
+  })
+
+def printArgs(x0: Args): String =
+  (x0 match {
+    case Args.nil() => ""
+    case Args.cons(e, Args.nil()) => printExpr(e)
+    case Args.cons(e, rest) => ((printExpr(e) + ", ") + printArgs(rest))
+  })
+
+def printBinOp(x0: BinOp): String =
+  (x0 match {
+    case BinOp.add() => "+ "
+    case BinOp.sub() => "- "
+    case BinOp.mul() => "* "
+    case BinOp.div() => "/ "
+    case BinOp.mod() => "% "
+    case BinOp.lt() => "< "
+    case BinOp.le() => "<= "
+    case BinOp.eqI() => "== "
+    case BinOp.eqB() => "== "
+    case BinOp.andB() => "&& "
+    case BinOp.orB() => "|| "
+  })
+
+def printExpr(x0: Expr): String =
+  (x0 match {
+    case Expr.intLit(n) => (if (n < BigInt(0)) then (("( - " + renderNat((n.abs))) + " ) ") else (renderNat((n.abs)) + " "))
+    case Expr.boolLit(true) => "true "
+    case Expr.boolLit(false) => "false "
+    case Expr.`var`(x_1) => (x_1 + " ")
+    case Expr.unop(op, e) => ((("( " + printUnOp(op)) + printExpr(e)) + ") ")
+    case Expr.binop(op, l, r) => (((("( " + printExpr(l)) + printBinOp(op)) + printExpr(r)) + ") ")
+    case Expr.ite(c, t, e) => (((((("( if " + printExpr(c)) + "then ") + printExpr(t)) + "else ") + printExpr(e)) + ") ")
+    case Expr.letE(x_1, bound, body) => (((((("( let " + x_1) + " = ") + printExpr(bound)) + "in ") + printExpr(body)) + ") ")
+    case Expr.call(f, args) => (((f + " ( ") + printArgs(args)) + ") ")
+  })
+
+def printFun(d: FunDef): String =
+  ((((((("def " + d.name) + " ( ") + printParams(d.params)) + ") : ") + printTy(d.retTy)) + "= ") + printExpr(d.body))
+
+def printFuns(x0: List[FunDef]): String =
+  (x0 match {
+    case Nil => ""
+    case (d :: rest) => (printFun(d) + printFuns(rest))
+  })
+
+def printParams(x0: List[(String, Ty)]): String =
+  (x0 match {
+    case Nil => ""
+    case ((x_1, _u3c4) :: Nil) => ((x_1 + " : ") + printTy(_u3c4))
+    case ((x_1, _u3c4) :: rest) => ((((x_1 + " : ") + printTy(_u3c4)) + ", ") + printParams(rest))
+  })
+
+def printProgram(p: Program): String =
+  (printFuns(p.funs) + printExpr(p.main))
+
+def printTy(x0: Ty): String =
+  (x0 match {
+    case Ty.int() => "int "
+    case Ty.bool() => "bool "
+  })
+
+def printUnOp(x0: UnOp): String =
+  (x0 match {
+    case UnOp.neg() => "- "
+    case UnOp.notB() => "! "
+  })
+
 def rbDemo: String =
   ((RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "a"), RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "c"), RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "zz")) match {
     case (Some(a), Some(c_p), None) => (((renderNat(a) + ",") + renderNat(c_p)) + ",miss")
@@ -732,6 +1100,12 @@ def renderValue(v: Value): String =
     case Value.vbool(b) => renderBool(b)
   })
 
+def rtOk(p: Program): Boolean =
+  (parseShallot(BigInt(1000000), printProgram(p)) match {
+    case Right(q) => (printProgram(q) == printProgram(p))
+    case Left(x2) => false
+  })
+
 @annotation.tailrec
 def ruleAt(x0: List[PExp], x1: BigInt): Option[PExp] =
   ((x0, x1) match {
@@ -742,6 +1116,21 @@ def ruleAt(x0: List[PExp], x1: BigInt): Option[PExp] =
 
 def runProgram(p: Program, fuel: BigInt): Option[Either[RtErr, Value]] =
   eval(mkFunTable(p.funs), fuel, Nil, p.main)
+
+def runSource(src: String): String =
+  (parseShallot(BigInt(1000000), src) match {
+    case Left(e) => ("parse-" + ParseErr_render(e))
+    case Right(p) => (checkProgram(p) match {
+    case Left(e) => ("err:" + TypeError_render(e))
+    case Right(x4) => renderEval(runProgram(p, BigInt(100000)))
+  })
+  })
+
+def shallotGrammar: Grammar =
+  Grammar(shallotRules, NT_program)
+
+def shallotRules: List[PExp] =
+  (PExp.star(PExp.alt(PExp.chr(BigInt(0x20)), PExp.alt(PExp.chr(BigInt(0xa)), PExp.alt(PExp.chr(BigInt(0x9)), PExp.chr(BigInt(0xd)))))) :: (PExp.seq(PExp.notP(PExp.seq(keywordP, PExp.notP(idContP))), PExp.seq(PExp.seq(idStartP, PExp.star(idContP)), PExp.nt(NT_spacing))) :: (PExp.seq(PExp.seq(PExp.range(BigInt(0x30), BigInt(0x39)), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39)))), PExp.nt(NT_spacing)) :: (PExp.alt(kw("int"), kw("bool")) :: (PExp.seq(PExp.nt(NT_spacing), PExp.seq(PExp.star(PExp.nt(NT_funDef)), PExp.seq(PExp.nt(NT_expr), PExp.notP(PExp.any())))) :: (PExp.seq(kw("def"), PExp.seq(PExp.nt(NT_ident), PExp.seq(tok("("), PExp.seq(PExp_opt(PExp.nt(NT_params)), PExp.seq(tok(")"), PExp.seq(tok(":"), PExp.seq(PExp.nt(NT_type_p), PExp.seq(eqTok, PExp.nt(NT_expr))))))))) :: (PExp.seq(PExp.nt(NT_param), PExp.star(PExp.seq(tok(","), PExp.nt(NT_param)))) :: (PExp.seq(PExp.nt(NT_ident), PExp.seq(tok(":"), PExp.nt(NT_type_p))) :: (PExp.alt(PExp.nt(NT_ifExpr), PExp.alt(PExp.nt(NT_letExpr), PExp.nt(NT_orE))) :: (PExp.seq(kw("if"), PExp.seq(PExp.nt(NT_expr), PExp.seq(kw("then"), PExp.seq(PExp.nt(NT_expr), PExp.seq(kw("else"), PExp.nt(NT_expr)))))) :: (PExp.seq(kw("let"), PExp.seq(PExp.nt(NT_ident), PExp.seq(eqTok, PExp.seq(PExp.nt(NT_expr), PExp.seq(kw("in"), PExp.nt(NT_expr)))))) :: (tier(NT_andE, tok("||")) :: (tier(NT_cmpE, tok("&&")) :: (PExp.seq(PExp.nt(NT_addE), PExp_opt(PExp.seq(PExp.alt(tok("<="), PExp.alt(ltTok, tok("=="))), PExp.nt(NT_addE)))) :: (tier(NT_mulE, PExp.alt(tok("+"), tok("-"))) :: (tier(NT_unary, PExp.alt(tok("*"), PExp.alt(tok("/"), tok("%")))) :: (PExp.alt(PExp.seq(tok("-"), PExp.nt(NT_unary)), PExp.alt(PExp.seq(tok("!"), PExp.nt(NT_unary)), PExp.nt(NT_primary))) :: (PExp.alt(PExp.nt(NT_number), PExp.alt(kw("true"), PExp.alt(kw("false"), PExp.alt(PExp.nt(NT_call), PExp.alt(PExp.nt(NT_ident), PExp.seq(tok("("), PExp.seq(PExp.nt(NT_expr), tok(")")))))))) :: (PExp.seq(PExp.nt(NT_ident), PExp.seq(tok("("), PExp.seq(PExp_opt(PExp.nt(NT_argList)), tok(")")))) :: (PExp.seq(PExp.nt(NT_expr), PExp.star(PExp.seq(tok(","), PExp.nt(NT_expr)))) :: Nil))))))))))))))))))))
 
 def shift(p: Point, dx: BigInt): Point =
   Point((p.x + dx), p.y)
@@ -756,6 +1145,25 @@ def stripPrefix_u3f(x0: List[BigInt], x1: List[BigInt]): Option[List[BigInt]] =
 
 def sumProg(n: BigInt): Program =
   Program((FunDef("sum", (("n", Ty.int()) :: Nil), Ty.int(), Expr.ite(Expr.binop(BinOp.le(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.intLit(BigInt(0)), Expr.binop(BinOp.add(), Expr.`var`("n"), Expr.call("sum", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil()))))) :: Nil), Expr.call("sum", Args.cons(Expr.intLit(n), Args.nil())))
+
+def tier(sub: BigInt, ops: PExp): PExp =
+  PExp.seq(PExp.nt(sub), PExp.star(PExp.seq(ops, PExp.nt(sub))))
+
+def tok(s: String): PExp =
+  PExp.seq(PExp.lit(RT.stringToList(s)), PExp.nt(NT_spacing))
+
+def treeToAst(x0: PTree): Either[ParseErr, Program] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(starT, PTree.seq(PTree.nodeNT(i, eT), r))) => (funItems(starT).flatMap(((x6: List[FunDef]) => (exprOf(eT).flatMap(((x7: Expr) => Right(Program(x6, x7))))))))
+    case x8 => Left(ParseErr.shape())
+  })
+
+def typeOf(x0: PTree): Either[ParseErr, Ty] =
+  (x0 match {
+    case PTree.choiceL(t) => Right(Ty.int())
+    case PTree.choiceR(t) => Right(Ty.bool())
+    case x3 => Left(ParseErr.shape())
+  })
 
 def typecheck(S: List[(String, (List[Ty], Ty))], _u393: List[(String, Ty)], x2: Expr): Either[TypeError, Ty] =
   (x2 match {
@@ -815,6 +1223,17 @@ def unOpSig(x0: UnOp): (Ty, Ty) =
   (x0 match {
     case UnOp.neg() => (Ty.int(), Ty.int())
     case UnOp.notB() => (Ty.bool(), Ty.bool())
+  })
+
+def unaryOf(x0: PTree): Either[ParseErr, Expr] =
+  (x0 match {
+    case PTree.choiceL(PTree.seq(l, PTree.nodeNT(i, subT))) => (unaryOf(subT).flatMap(((x4: Expr) => (x4 match {
+    case Expr.intLit(n) => Right(Expr.intLit((-n)))
+    case e => Right(Expr.unop(UnOp.neg(), e))
+  }))))
+    case PTree.choiceR(PTree.choiceL(PTree.seq(l, PTree.nodeNT(i, subT)))) => (unaryOf(subT).flatMap(((x10: Expr) => Right(Expr.unop(UnOp.notB(), x10)))))
+    case PTree.choiceR(PTree.choiceR(PTree.nodeNT(i, pT))) => primaryOf(pT)
+    case x13 => Left(ParseErr.shape())
   })
 
 @annotation.tailrec

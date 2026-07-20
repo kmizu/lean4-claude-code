@@ -8,7 +8,8 @@ L2: they are COMPLETE (note completeness of `typecheckArgs` holds for any
     `f` — the name is only an error payload).
 L3: `checkProgram` decides `WTProg`, both directions.
 
-No `sorry`, no extra axioms beyond the usual `propext`/`Quot.sound`.
+No unproven holes; only the standard axioms (`propext`, `Classical.choice`,
+`Quot.sound`).
 -/
 
 namespace Shallot
@@ -161,43 +162,34 @@ end
 mutual
 
 theorem typecheck_complete (S : Sig) (Γ : TyCtx) (e : Expr) (τ : Ty)
-    (h : HasType S Γ e τ) : typecheck S Γ e = .ok τ := by
-  cases h
-  case intLit => simp [typecheck]
-  case boolLit => simp [typecheck]
-  case var =>
-    rename_i hx
-    simp [typecheck, hx]
-  case unop =>
-    rename_i he
-    simp [typecheck, typecheck_complete S _ _ _ he, Ty.beq_refl]
-  case binop =>
-    rename_i hl hr
-    simp [typecheck, typecheck_complete S _ _ _ hl,
-      typecheck_complete S _ _ _ hr, Ty.beq_refl]
-  case ite =>
-    rename_i hc ht he
-    simp [typecheck, typecheck_complete S _ _ _ hc,
-      typecheck_complete S _ _ _ ht, typecheck_complete S _ _ _ he,
-      Ty.beq_refl, Ty.beq]
-  case letE =>
-    rename_i h₁ h₂
-    simp [typecheck, typecheck_complete S _ _ _ h₁,
-      typecheck_complete S _ _ _ h₂]
-  case call =>
-    rename_i hf hargs
-    have hargs' := fun f' : String => typecheckArgs_complete S _ f' _ _ hargs
-    simp [typecheck, hf, hargs']
+    (h : HasType S Γ e τ) : typecheck S Γ e = .ok τ :=
+  match Γ, e, τ, h with
+  | _, _, _, .intLit Γ n => by simp [typecheck]
+  | _, _, _, .boolLit Γ b => by simp [typecheck]
+  | _, _, _, .var Γ x τ hx => by simp [typecheck, hx]
+  | _, _, _, .unop Γ op e he => by
+    simp [typecheck, typecheck_complete S Γ e (unOpSig op).1 he, Ty.beq_refl]
+  | _, _, _, .binop Γ op l r hl hr => by
+    simp [typecheck, typecheck_complete S Γ l (binOpSig op).1 hl,
+      typecheck_complete S Γ r (binOpSig op).2.1 hr, Ty.beq_refl]
+  | _, _, _, .ite Γ c t e τ hc ht he => by
+    simp [typecheck, typecheck_complete S Γ c .bool hc,
+      typecheck_complete S Γ t τ ht, typecheck_complete S Γ e τ he,
+      Ty.beq_refl]
+  | _, _, _, .letE Γ x bound body τ₁ τ₂ h₁ h₂ => by
+    simp [typecheck, typecheck_complete S Γ bound τ₁ h₁,
+      typecheck_complete S ((x, τ₁) :: Γ) body τ₂ h₂]
+  | _, _, _, .call Γ f args tys ret hf hargs => by
+    simp [typecheck, hf, typecheckArgs_complete S Γ f args tys hargs]
 
 theorem typecheckArgs_complete (S : Sig) (Γ : TyCtx) (f : String) (as : Args)
     (tys : List Ty) (h : HasTypeArgs S Γ as tys) :
-    typecheckArgs S Γ f as tys = .ok () := by
-  cases h
-  case nil => simp [typecheckArgs]
-  case cons =>
-    rename_i he hr
-    simp [typecheckArgs, typecheck_complete S _ _ _ he,
-      typecheckArgs_complete S _ f _ _ hr, Ty.beq_refl]
+    typecheckArgs S Γ f as tys = .ok () :=
+  match Γ, as, tys, h with
+  | _, _, _, .nil Γ => by simp [typecheckArgs]
+  | _, _, _, .cons Γ e rest τ tys he hr => by
+    simp [typecheckArgs, typecheck_complete S Γ e τ he,
+      typecheckArgs_complete S Γ f rest tys hr, Ty.beq_refl]
 
 end
 
