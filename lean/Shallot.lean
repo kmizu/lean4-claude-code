@@ -6,4 +6,10 @@ import Shallot.Corpus
 import Shallot.Peg.Syntax
 import Shallot.Peg.Semantics
 import Shallot.Peg.Interp
+import Shallot.Peg.Props
+import Shallot.Peg.Fuel
+import Shallot.Peg.Soundness
+import Shallot.Peg.Determinism
+import Shallot.Peg.Completeness
+import Shallot.Data.RBMap
 import Shallot.Tests.Guards
