@@ -15,5 +15,5 @@ if [ ! -f ../scala/generated/.lens-ready ]; then
   exit 0
 fi
 
-lake exe extract -- --out "$OUT" --pkg shallot.gen
+lake exe extract --out "$OUT" --pkg shallot.gen
 echo "regen: wrote $OUT"

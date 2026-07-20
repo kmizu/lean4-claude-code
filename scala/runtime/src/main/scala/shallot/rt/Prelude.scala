@@ -13,6 +13,25 @@ object Prelude:
   def natDiv(a: BigInt, b: BigInt): BigInt = if b == 0 then 0 else a / b
   def natMod(a: BigInt, b: BigInt): BigInt = if b == 0 then a else a % b
 
+  /** Lean `Int` division — **Euclidean** (`Int.ediv`), pinned empirically in
+    * M1: `(-7)/2 = -4`, `7/(-2) = -3`, `x/0 = 0`. Scala `BigInt./` is
+    * T-division, hence the correction.
+    */
+  def intDiv(a: BigInt, b: BigInt): BigInt =
+    if b == 0 then 0
+    else
+      val q = a / b
+      if a % b < 0 then (if b > 0 then q - 1 else q + 1) else q
+
+  /** Lean `Int` modulo — **Euclidean** (`Int.emod`): remainder ≥ 0 for
+    * b ≠ 0; `x % 0 = x`.
+    */
+  def intMod(a: BigInt, b: BigInt): BigInt =
+    if b == 0 then a
+    else
+      val r = a % b
+      if r < 0 then r + b.abs else r
+
   final case class LensPanic(msg: String) extends RuntimeException(msg)
   def panic[A](msg: String): A = throw LensPanic(msg)
 

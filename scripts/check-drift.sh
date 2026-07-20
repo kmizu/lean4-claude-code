@@ -14,7 +14,7 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-( cd lean && lake build Shallot extract >/dev/null && lake exe extract -- --out "$tmp" --pkg shallot.gen )
+( cd lean && lake build Shallot extract >/dev/null && lake exe extract --out "$tmp" --pkg shallot.gen )
 
 if ! diff -ru "$tmp" "$GEN"; then
   echo "check-drift: DRIFT — committed generated code is stale. Run 'make regen' and review the diff." >&2

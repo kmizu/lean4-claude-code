@@ -12,6 +12,19 @@ class PreludeSuite extends munit.FunSuite:
     assertEquals(Prelude.natDiv(7, 2), BigInt(3))
     assertEquals(Prelude.natMod(7, 2), BigInt(1))
 
+  test("int div/mod are Euclidean (pinned against Lean #eval, M1)"):
+    assertEquals(Prelude.intDiv(-7, 2), BigInt(-4))
+    assertEquals(Prelude.intDiv(7, -2), BigInt(-3))
+    assertEquals(Prelude.intDiv(-7, -2), BigInt(4))
+    assertEquals(Prelude.intDiv(7, 2), BigInt(3))
+    assertEquals(Prelude.intMod(-7, 2), BigInt(1))
+    assertEquals(Prelude.intMod(7, -2), BigInt(1))
+    assertEquals(Prelude.intMod(-7, -2), BigInt(1))
+    assertEquals(Prelude.intMod(7, 2), BigInt(1))
+    assertEquals(Prelude.intDiv(7, 0), BigInt(0))
+    assertEquals(Prelude.intMod(7, 0), BigInt(7))
+    assertEquals(Prelude.intMod(-7, 0), BigInt(-7))
+
   test("panic throws LensPanic"):
     intercept[Prelude.LensPanic] {
       Prelude.panic[Int]("boom")
