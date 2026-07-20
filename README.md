@@ -1,40 +1,77 @@
 # Shallot + Lens
 
-**Shallot** — 完全な仕様・実装・機械検証された証明を Lean 4 で書いた第一階関数型ミニ言語
-（PEGパーサフレームワーク＋形式意味論、型検査器、インタプリタ、定数畳み込み最適化器、
-スタックVMコンパイラ、赤黒木マップ）。
+**完全な仕様・実装・機械検証された証明のセット、そして Lean 4 → Scala 3 抽出器。**
 
-**Lens** — Lean 4 → Scala 3 抽出器（Leanメタプログラム）。Shallot の実行可能部分を
-読みやすい Scala 3 に抽出する。
+- **Shallot** — Lean 4 で仕様・実装・証明を書いた第一階関数型ミニ言語。
+  形式意味論つき PEG パーサフレームワーク、健全かつ完全な型検査器、
+  型健全なインタプリタ、意味保存の定数畳み込み最適化器、
+  正しさ証明つきスタック VM コンパイラ、検証済み赤黒木マップ。
+- **Lens** — Lean 4 → Scala 3 抽出器（Lean メタプログラム、等式補題ルート）。
+  既知の先行事例なし。Shallot の実行可能部分を idiomatic な Scala 3 に抽出する。
 
 ```mermaid
 flowchart LR
-    S[lean/Shallot\n仕様+実装+証明] -->|lake build\n= 全証明の検査| S
-    S -->|lake exe extract\nLens 抽出器| G[scala/generated\n生成 Scala 3]
-    R[scala/runtime\n手書きプレリュード] --> G
-    G --> C[scala/shallot-cli]
-    S -.->|shallot-runner| D{差分ハーネス\ncorpus/}
+    S["lean/Shallot<br/>仕様+実装+証明<br/>(sorry ゼロ)"] -->|"lake build<br/>= 全証明+公理監査"| S
+    S -->|"lake exe extract<br/>(Lens)"| G["scala/generated<br/>~1300行の Scala 3"]
+    R["scala/runtime<br/>手書きプレリュード"] --> G
+    G --> C["shallot-cli<br/>run / eval / dump"]
+    S -.->|shallot-runner| D{"差分ハーネス<br/>60ケース 3方向一致"}
     C -.->|dump| D
 ```
 
-## TCB（信頼ベース）
+## 何が証明されているか
 
-**信頼するもの**: Lean カーネル、Lens 抽出器、手書き Scala ランタイムプレリュード、
-Scala 3 コンパイラと JVM。
-**検証済みのもの**: Lean レベルの全定理（定理一覧は完成時に本欄へ）。
-差分コーパス（`corpus/`）が、信頼側の抽出経路に対する経験的チェックとなる。
+30本超のフラッグシップ定理、すべて `sorry` ゼロ・標準公理
+（`propext`/`Classical.choice`/`Quot.sound`、多くはそれ以下）のみ。
+`lean/Audit.lean` の `#guard_msgs in #print axioms` により**ビルド自体が公理監査**。
+完全な一覧は [docs/theorems.md](docs/theorems.md)。ハイライト：
 
-## ビルド
+- **PEG**: Ford 流形式意味論に対するインタプリタの健全性・完全性・決定性
+  （決定性は構文木の一意性込み・公理ゼロ）
+- **型検査器**: 型付け関係に対して健全**かつ**完全
+- **型健全性**: well-typed なプログラムは stuck しない（`divByZero` のみ許容）
+- **コンパイラ正しさ**: `runProgram` が値 v で成功 ⇒ コンパイル済み VM も同じ v
+- **最適化器**: 定数畳み込みは型と評価結果を保存（プログラム全体レベル）
+- **赤黒木**: BST 順序・赤黒平衡（Okasaki、フル強度）・モデル refinement
+- **パーサ roundtrip**: 正準印字は検証済み PEG パーサで元の AST に復元される
+  （字句層・式層まで証明済み、プログラム層は最終組み立て中）
+
+具象構文のパーサは**検証済み汎用 PEG インタプリタに文法データを与えたもの**なので、
+PEG の健全性・完全性・決定性が Shallot パーサにそのまま適用される。
+
+## 動かす
 
 ```sh
-scripts/install-lean.sh   # elan + Lean v4.32.0（初回のみ）
-make verify               # 監査 → 全証明検査 → 抽出器テスト → ドリフト検査 → sbt test → 差分ハーネス
+scripts/install-lean.sh   # elan + Lean v4.32.0（初回のみ、~1.5GB）
+make verify               # 監査 → 全証明検査 → 抽出器golden → ドリフト → sbt test → 差分60ケース
+
+cd scala
+sbt "shallotCli/run run ../examples/fact.shl"      # => ok:3628800
+sbt "shallotCli/run run ../examples/collatz.shl"   # => ok:111
+sbt "shallotCli/run eval \"1 + 2 * 3\""            # => ok:7
 ```
+
+CLI の言語処理は**全部 Lean からの抽出コード**や：パース＝形式検証済み PEG
+インタプリタ、型検査＝健全性・完全性証明済み、評価＝型健全性証明済み。
+
+## 規模
+
+Lean 約 10,300 行（うち証明 約 6,600 行 + 進行分）、Lens 抽出器 約 4,000 行、
+生成 Scala 約 1,300 行、差分コーパス 60 ケース、コミット 23+。
+
+## TCB（信頼ベース）
+
+**信頼するもの**: Lean カーネル、Lens 抽出器、手書き Scala ランタイム
+（`shallot.rt`、約 550 行）、Scala 3 コンパイラと JVM。
+**検証済みのもの**: Lean レベルの全定理（上記）。
+橋渡しは差分ハーネス（`corpus/`）：ケーステーブル自体を Lean で定義して抽出し、
+Lean ネイティブ実行と抽出 Scala 実行を突き合わせる——レンダラや評価器の
+ドリフトは即座に差分として現れる。抽出器の対応範囲と制約は
+[docs/extractable-subset.md](docs/extractable-subset.md)。
 
 ## 方針
 
-- `sorry` ゼロ。未証明の定理はソースに存在しない（`docs/roadmap.md` の TODO にのみ存在する）
-- 公理は `propext` / `Classical.choice` / `Quot.sound` のみ。`lean/Audit.lean` の
-  `#guard_msgs in #print axioms` がビルド時に機械検証する
-- `scala/generated` はコミットされ、`scripts/check-drift.sh` が鮮度を保証する
-- 外部依存ゼロ（Mathlib / Batteries 不使用）
+- `sorry`・`admit`・`native_decide`・追加公理はソースに存在しない
+  （`scripts/audit-source.sh` がソースレベルで、`Audit.lean` が意味レベルで拒否）
+- `scala/generated` はコミットされ、`scripts/check-drift.sh` が鮮度を機械保証
+- 外部依存ゼロ（Mathlib / Batteries 不使用）、ツールチェーンは v4.32.0 に固定
