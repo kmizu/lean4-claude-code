@@ -11,6 +11,11 @@ namespace Lens
 open Lean Meta
 
 def translateName (n : Name) : ExtractM Unit := do
+  -- Mutual-block members may already be done by the time their queue entry
+  -- drains; only pending/unseen names proceed.
+  match (← get).seen.find? n with
+  | some .emitted | some .skipped | some .builtinRef => return
+  | _ => pure ()
   modify fun s => { s with current := n, fresh := 0 }
   match (← getEnv).find? n with
   | none => recordError n "closure" "unknown constant"

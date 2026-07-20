@@ -2,6 +2,8 @@ import Shallot.Demo
 import Shallot.Render
 import Shallot.Torture
 import Shallot.Peg.Interp
+import Shallot.Lang.TypeCheck
+import Shallot.Data.RBMap
 
 /-!
 # Differential corpus (single source of truth)
@@ -24,6 +26,54 @@ def digitGrammar : Grammar :=
 /-- Toy grammar: rule 0 = `"if" ![a-z]` (keyword with guard). -/
 def kwIfGrammar : Grammar :=
   { rules := [.seq (.lit "if".toList) (.notP (.range 'a' 'z'))], start := 0 }
+
+/-- Sample: `def fact(n: int): int = if n <= 0 then 1 else n * fact(n - 1)`
+with `main = fact(5)` (as an AST — concrete syntax lands in M11). -/
+def factProg : Program :=
+  { funs := [
+      { name := "fact", params := [("n", .int)], retTy := .int,
+        body := .ite (.binop .le (.var "n") (.intLit 0))
+          (.intLit 1)
+          (.binop .mul (.var "n")
+            (.call "fact" (.cons (.binop .sub (.var "n") (.intLit 1)) .nil))) } ],
+    main := .call "fact" (.cons (.intLit 5) .nil) }
+
+/-- Mutual recursion: even/odd. -/
+def evenOddProg : Program :=
+  { funs := [
+      { name := "even", params := [("n", .int)], retTy := .bool,
+        body := .ite (.binop .eqI (.var "n") (.intLit 0))
+          (.boolLit true)
+          (.call "odd" (.cons (.binop .sub (.var "n") (.intLit 1)) .nil)) },
+      { name := "odd", params := [("n", .int)], retTy := .bool,
+        body := .ite (.binop .eqI (.var "n") (.intLit 0))
+          (.boolLit false)
+          (.call "even" (.cons (.binop .sub (.var "n") (.intLit 1)) .nil)) } ],
+    main := .call "even" (.cons (.intLit 10) .nil) }
+
+/-- Reject: unbound variable in main. -/
+def badUnbound : Program := { funs := [], main := .var "ghost" }
+
+/-- Reject: `1 + true`. -/
+def badMismatch : Program :=
+  { funs := [], main := .binop .add (.intLit 1) (.boolLit true) }
+
+/-- Reject: unknown function. -/
+def badUnknownFun : Program :=
+  { funs := [], main := .call "nope" .nil }
+
+/-- Reject: arity mismatch. -/
+def badArity : Program :=
+  { funs := [
+      { name := "id1", params := [("x", .int)], retTy := .int, body := .var "x" } ],
+    main := .call "id1" .nil }
+
+/-- RBMap smoke sequence: fromList + find hits and misses. -/
+def rbDemo : String :=
+  let t := RBNode.fromList [("b", 2), ("a", 1), ("c", 3), ("a", 10)]
+  match RBNode.find? t "a", RBNode.find? t "c", RBNode.find? t "zz" with
+  | some a, some c', none => renderNat a ++ "," ++ renderNat c' ++ ",miss"
+  | _, _, _ => "unexpected"
 
 def cases : List (String × String) :=
   [ ("000-nat-sub-underflow", renderNat (clampSub 3 5)),
@@ -55,6 +105,15 @@ def cases : List (String × String) :=
     ("206-peg-not-compose",   renderPeg (pegRun kwIfGrammar 100 (.notP (.nt 0)) "iffy".toList)),
     ("207-peg-fuel-out",      renderPeg (pegRun digitGrammar 0 (.nt 0) "1".toList)),
     ("208-peg-star-empty",    renderPeg (pegRun digitGrammar 100 (.star (.range '0' '9')) "abc".toList)),
-    ("209-peg-opt",           renderPeg (pegRun digitGrammar 100 (PExp.opt (.chr 'x')) "abc".toList)) ]
+    ("209-peg-opt",           renderPeg (pegRun digitGrammar 100 (PExp.opt (.chr 'x')) "abc".toList)),
+    -- 02x: RBMap through extraction
+    ("300-rbmap-find",        rbDemo),
+    -- 03x/04x: typechecker accept/reject
+    ("310-tc-fact",           renderTC (checkProgram factProg)),
+    ("311-tc-evenodd",        renderTC (checkProgram evenOddProg)),
+    ("320-tc-unbound",        renderTC (checkProgram badUnbound)),
+    ("321-tc-mismatch",       renderTC (checkProgram badMismatch)),
+    ("322-tc-unknown",        renderTC (checkProgram badUnknownFun)),
+    ("323-tc-arity",          renderTC (checkProgram badArity)) ]
 
 end Shallot

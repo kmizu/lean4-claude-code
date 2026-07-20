@@ -71,6 +71,11 @@ partial def transType (tvars : List (FVarId × String)) (e : Expr) : ExtractM MS
           | some (.inductInfo _) =>
             require c
             return .named [← mangled c] (← args.toList.mapM (transType tvars))
+          | some (.defnInfo _) =>
+            -- type abbreviation (e.g. `abbrev Sig := List …`): unfold
+            match ← unfoldDefinition? e with
+            | some e' => transType tvars e'
+            | none => err "type" s!"unsupported type head '{c}' (non-unfoldable definition)"
           | _ => err "type" s!"unsupported type head '{c}'"
     | _ => err "type" s!"unsupported type expression"
 where
@@ -83,9 +88,9 @@ where
 def isPropFormer (ty : Expr) : MetaM Bool :=
   forallTelescopeReducing ty fun _ body => return body.isProp
 
-def transInductive (iv : InductiveVal) : ExtractM Unit := do
+/-- Translate ONE inductive (possibly a member of a mutual block). -/
+def transInductiveOne (iv : InductiveVal) : ExtractM Unit := do
   if iv.numIndices > 0 then err "inductive" "indexed inductives are not extractable"
-  if iv.all.length > 1 then err "inductive" "mutual inductives land in v3"
   if iv.isUnsafe then err "inductive" "unsafe inductive"
   let sName ← mangled iv.name
   let tparams := (List.range iv.numParams).map tparamName
@@ -106,6 +111,15 @@ def transInductive (iv : InductiveVal) : ExtractM Unit := do
     emit (.caseClass sName tparams ctors.head!.2)
   else
     emit (.adt sName tparams ctors)
+
+/-- Translate a whole (possibly mutual) inductive block. Each member is
+emitted once; siblings are marked seen so their queue entries no-op. -/
+def transInductive (iv : InductiveVal) : ExtractM Unit := do
+  for n in iv.all do
+    let already := (← get).seen.find? n == some .emitted
+    if !already then
+      markSeen n .emitted
+      transInductiveOne (← getConstInfoInduct n)
 
 /-! ## Terms -/
 
@@ -256,6 +270,8 @@ partial def transTerm (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       let (n, ctx) ← pushVar ctx fv.fvarId! nm
       return .letE n (some t') v' (← transTerm ctx (b.instantiate1 fv))
   | .proj tyName idx s =>
+    if tyName == ``Prod then
+      return .builtin (if idx == 0 then "fst" else "snd") [← transTerm ctx s]
     let some si := getStructureInfo? (← getEnv) tyName
       | err "term" s!"primitive projection on non-structure {tyName}"
     let some fname := si.fieldNames[idx]?
@@ -346,15 +362,23 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
         else
           let struct ← transTerm ctx args[pinfo.numParams]!
           let extra ← (args.toList.drop (pinfo.numParams + 1)).mapM (transTerm ctx)
-          return mkApp' (.proj (Mangle.mangleLast c) struct) extra
+          -- Prod projections map to Scala tuple accessors, not field names.
+          if pinfo.ctorName == ``Prod.mk then
+            let key := if pinfo.i == 0 then "fst" else "snd"
+            return mkApp' (.builtin key [struct]) extra
+          else
+            return mkApp' (.proj (Mangle.mangleLast c) struct) extra
       | none =>
         if ← Meta.isProp dv.type then
           err "term" s!"proof constant '{c}' in executable code"
-        else if ← hasTypeParams dv.type then
-          err "term" s!"polymorphic definition '{c}' (lands in v1)"
         else
+          let nT ← countLeadingTypeParams dv.type
+          if args.size < nT then
+            err "term" s!"partially applied polymorphic definition '{c}'"
           require c
-          return mkApp' (.global [← mangled c] []) (← args.toList.mapM (transTerm ctx))
+          let targs ← (args.toList.take nT).mapM (transType ctx.tvars)
+          let rest ← (args.toList.drop nT).mapM (transTerm ctx)
+          return mkApp' (.global [← mangled c] targs) rest
     | some (.thmInfo _) => err "term" s!"theorem '{c}' leaked into executable code"
     | some _ => err "term" s!"unsupported constant '{c}'"
     | none => err "term" s!"unknown constant '{c}'"
@@ -362,11 +386,18 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
 where
   mkApp' (base : MS.SExpr) (extra : List MS.SExpr) : MS.SExpr :=
     if extra.isEmpty then base else .app base extra
-  hasTypeParams (ty : Expr) : ExtractM Bool :=
+  /-- Count PREFIX type binders; non-prefix polymorphism is fail-loud. -/
+  countLeadingTypeParams (ty : Expr) : ExtractM Nat :=
     forallTelescopeReducing ty fun xs _ => do
+      let mut n := 0
+      let mut valueSeen := false
       for x in xs do
-        if (← x.fvarId!.getDecl).type.isSort then return true
-      return false
+        if (← x.fvarId!.getDecl).type.isSort then
+          if valueSeen then err "term" "type parameter after a value parameter"
+          n := n + 1
+        else
+          valueSeen := true
+      return n
 
 /-- Decompose a matcher application (`f.match_N params motive discrs alts`)
 into a Scala `match` (extractor v2, the review-flagged risk item).
@@ -462,24 +493,37 @@ def recursionMarkers (e : Expr) : List Name :=
      | .str _ s => s == "brecOn" || s == "rec"
      | _ => false)
 
+/-- Split a definition's telescope into leading type parameters (Sort
+binders → Scala tparams) and value parameters. Sort binders after a value
+binder are rejected (non-prefix polymorphism). -/
+def sigParams (xs : Array Expr) : ExtractM (List String × TCtx × List (String × MS.SType)) := do
+  let mut ctx : TCtx := {}
+  let mut tparams : List String := []
+  let mut params : List (String × MS.SType) := []
+  for x in xs do
+    let ld ← x.fvarId!.getDecl
+    if ld.type.isSort then
+      if !params.isEmpty then
+        err "def" "type parameter after a value parameter (non-prefix polymorphism)"
+      let tn := tparamName tparams.length
+      tparams := tparams ++ [tn]
+      ctx := { ctx with tvars := (x.fvarId!, tn) :: ctx.tvars }
+    else if ← Meta.isProp ld.type then
+      err "def" "Prop parameter in extracted definition"
+    else
+      let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
+      ctx := ctx'
+      params := params ++ [(n, ← transType ctx.tvars ld.type)]
+  return (tparams, ctx, params)
+
 def transDef (dv : DefinitionVal) : ExtractM Unit := do
   let markers := recursionMarkers dv.value
   if !markers.isEmpty then
     err "def" s!"recursive definition (via {markers}) — the equation route lands in v1"
   forallTelescopeReducing dv.type fun xs ret => do
-    let mut ctx : TCtx := {}
-    let mut params : List (String × MS.SType) := []
-    for x in xs do
-      let ld ← x.fvarId!.getDecl
-      if ld.type.isSort then
-        err "def" "polymorphic definition (lands in v1)"
-      if ← Meta.isProp ld.type then
-        err "def" "Prop parameter in extracted definition"
-      let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
-      ctx := ctx'
-      params := params ++ [(n, ← transType ctx.tvars ld.type)]
+    let (tparams, ctx, params) ← sigParams xs
     let retTy ← transType ctx.tvars ret
     let body := (mkAppN dv.value xs).headBeta
-    emit (.defn (← mangled dv.name) [] params retTy (← transTerm ctx body) false)
+    emit (.defn (← mangled dv.name) tparams params retTy (← transTerm ctx body) false)
 
 end Lens

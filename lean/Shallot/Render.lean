@@ -1,4 +1,5 @@
 import Shallot.Peg.Syntax
+import Shallot.Lang.TypeCheck
 
 /-!
 # Canonical result renderer
@@ -27,5 +28,15 @@ def renderPeg (o : Option Outcome) : String :=
   | none => "fuel"
   | some .fail => "fail"
   | some (.ok _ rest) => "ok+" ++ renderNat (lenChars rest)
+
+def renderTy (τ : Ty) : String :=
+  match τ with
+  | .int => "int"
+  | .bool => "bool"
+
+def renderTC (r : Except TypeError Ty) : String :=
+  match r with
+  | .ok τ => "ok:" ++ renderTy τ
+  | .error e => "err:" ++ e.render
 
 end Shallot

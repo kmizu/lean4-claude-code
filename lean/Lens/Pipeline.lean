@@ -22,7 +22,9 @@ def defaultRoots : List Name :=
    -- Torture regressions (review findings — must extract CORRECTLY)
    `Shallot.cap1, `Shallot.capB, `Shallot.captureD, `Shallot.bigLit,
    -- M3: PEG interpreter (nested matchers, extractor v2)
-   `Shallot.pegRun, `Shallot.renderPeg]
+   `Shallot.pegRun, `Shallot.renderPeg,
+   -- M5: typechecker (mutual recursion) + RBMap (polymorphic defs)
+   `Shallot.checkProgram, `Shallot.renderTC, `Shallot.rbDemo]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

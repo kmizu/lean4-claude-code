@@ -12,4 +12,7 @@ import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
 import Shallot.Data.RBMap
+import Shallot.Lang.Ast
+import Shallot.Lang.Typing
+import Shallot.Lang.TypeCheck
 import Shallot.Tests.Guards

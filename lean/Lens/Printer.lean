@@ -95,6 +95,8 @@ def renderBuiltin (key : String) (args : List String) : String :=
   | "right", [a] => s!"Right({a})"
   | "tuple2", [a, b] => s!"({a}, {b})"
   | "mkTuple", args => s!"({String.intercalate ", " args})"
+  | "fst", [a] => s!"({a}._1)"
+  | "snd", [a] => s!"({a}._2)"
   | _, _ => s!"__LENS_UNKNOWN_BUILTIN_{key}__" -- deliberately un-compilable
 
 /-- Rendered pattern plus guard conditions and pre-body `val` bindings

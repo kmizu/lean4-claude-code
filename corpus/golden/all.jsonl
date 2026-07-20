@@ -26,3 +26,10 @@
 {"case":"207-peg-fuel-out","phase":"eval","status":"ok","result":"fuel"}
 {"case":"208-peg-star-empty","phase":"eval","status":"ok","result":"ok+3"}
 {"case":"209-peg-opt","phase":"eval","status":"ok","result":"ok+3"}
+{"case":"300-rbmap-find","phase":"eval","status":"ok","result":"1,3,miss"}
+{"case":"310-tc-fact","phase":"eval","status":"ok","result":"ok:int"}
+{"case":"311-tc-evenodd","phase":"eval","status":"ok","result":"ok:bool"}
+{"case":"320-tc-unbound","phase":"eval","status":"ok","result":"err:UnboundVar:ghost"}
+{"case":"321-tc-mismatch","phase":"eval","status":"ok","result":"err:TypeMismatch"}
+{"case":"322-tc-unknown","phase":"eval","status":"ok","result":"err:UnknownFun:nope"}
+{"case":"323-tc-arity","phase":"eval","status":"ok","result":"err:ArityMismatch:id1"}

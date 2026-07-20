@@ -86,18 +86,12 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
   forallTelescopeReducing dv.type fun xs ret => do
     if xs.size != nArgs then
       err "eqns" s!"equation arity {nArgs} ≠ signature arity {xs.size} (packed args land in v3)"
-    let mut sigCtx : TCtx := {}
-    let mut sigNames : Array String := #[]
-    let mut params : List (String × MS.SType) := []
-    for x in xs do
-      let ld ← x.fvarId!.getDecl
-      if ld.type.isSort then err "eqns" "polymorphic recursive def (lands in v2)"
-      if ← Meta.isProp ld.type then err "eqns" "Prop parameter in recursive def"
-      let (n, sigCtx') ← pushVar sigCtx x.fvarId! ld.userName
-      sigCtx := sigCtx'
-      sigNames := sigNames.push n
-      params := params ++ [(n, ← transType [] ld.type)]
-    let retTy ← transType [] ret
+    let (tparams, sigCtx, params) ← sigParams xs
+    let nT := tparams.length
+    if patPos.any (· < nT) then
+      err "eqns" "pattern in a type-parameter position"
+    let sigNames : Array String := (params.map (·.1)).toArray
+    let retTy ← transType sigCtx.tvars ret
     let name ← mangled dv.name
 
     -- No pattern positions: a single unfold equation (`f x y = rhs`) —
@@ -112,10 +106,14 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
         let mut ctx : TCtx := {}
         for i in [0 : nArgs] do
           match lhsArgs[i]!.consumeMData with
-          | .fvar id => ctx := { ctx with vars := (id, sigNames[i]!) :: ctx.vars }
+          | .fvar id =>
+            if i < nT then
+              ctx := { ctx with tvars := (id, tparams[i]!) :: ctx.tvars }
+            else
+              ctx := { ctx with vars := (id, sigNames[i - nT]!) :: ctx.vars }
           | _ => err "eqns" "non-variable in pattern-free equation LHS"
         transTerm ctx rhs
-      emit (.defn name [] params retTy body (isSelfTailRec name body))
+      emit (.defn name tparams params retTy body (isSelfTailRec name body))
       return
 
     -- Pass 2: one Scala case per equation.
@@ -138,7 +136,11 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
             pats := pats ++ [p]
           else
             match a with
-            | .fvar id => ctx := { ctx with vars := (id, sigNames[i]!) :: ctx.vars }
+            | .fvar id =>
+              if i < nT then
+                ctx := { ctx with tvars := (id, tparams[i]!) :: ctx.tvars }
+              else
+                ctx := { ctx with vars := (id, sigNames[i - nT]!) :: ctx.vars }
             | _ => err "eqns" "non-variable at pass-through position"
         let pat : MS.Pat := match pats with
           | [p] => p
@@ -147,9 +149,9 @@ def transDefViaEqns (dv : DefinitionVal) (eqns : Array Name) : ExtractM Unit := 
       cases := cases ++ [(pat, body)]
 
     let scrut : MS.SExpr := match patPos with
-      | [i] => .var sigNames[i]!
-      | is => .builtin "mkTuple" (is.map fun i => .var sigNames[i]!)
+      | [i] => .var sigNames[i - nT]!
+      | is => .builtin "mkTuple" (is.map fun i => .var sigNames[i - nT]!)
     let body := MS.SExpr.matchE scrut cases
-    emit (.defn name [] params retTy body (isSelfTailRec name body))
+    emit (.defn name tparams params retTy body (isSelfTailRec name body))
 
 end Lens

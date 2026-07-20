@@ -4,12 +4,54 @@ package shallot.gen
 
 import shallot.rt.Prelude as RT
 
+sealed trait Args
+object Args {
+  final case class nil() extends Args
+  final case class cons(e: Expr, rest: Args) extends Args
+}
+
+sealed trait BinOp
+object BinOp {
+  final case class add() extends BinOp
+  final case class sub() extends BinOp
+  final case class mul() extends BinOp
+  final case class div() extends BinOp
+  final case class mod() extends BinOp
+  final case class lt() extends BinOp
+  final case class le() extends BinOp
+  final case class eqI() extends BinOp
+  final case class eqB() extends BinOp
+  final case class andB() extends BinOp
+  final case class orB() extends BinOp
+}
+
+sealed trait Cmp
+object Cmp {
+  final case class lt() extends Cmp
+  final case class eq() extends Cmp
+  final case class gt() extends Cmp
+}
+
 sealed trait Color
 object Color {
   final case class red() extends Color
   final case class green() extends Color
   final case class blue() extends Color
 }
+
+sealed trait Expr
+object Expr {
+  final case class intLit(n: BigInt) extends Expr
+  final case class boolLit(b: Boolean) extends Expr
+  final case class `var`(x: String) extends Expr
+  final case class unop(op: UnOp, e: Expr) extends Expr
+  final case class binop(op: BinOp, l: Expr, r: Expr) extends Expr
+  final case class ite(c: Expr, t: Expr, e: Expr) extends Expr
+  final case class letE(x: String, bound: Expr, body: Expr) extends Expr
+  final case class call(f: String, args: Args) extends Expr
+}
+
+final case class FunDef(name: String, params: List[(String, Ty)], retTy: Ty, body: Expr)
 
 final case class Grammar(rules: List[PExp], start: BigInt)
 
@@ -47,6 +89,40 @@ object PTree {
 
 final case class Point(x: BigInt, y: BigInt)
 
+final case class Program(funs: List[FunDef], main: Expr)
+
+sealed trait RBColor
+object RBColor {
+  final case class red() extends RBColor
+  final case class black() extends RBColor
+}
+
+sealed trait RBNode[A]
+object RBNode {
+  final case class leaf[A]() extends RBNode[A]
+  final case class node[A](c: RBColor, l: RBNode[A], k: String, v: A, r: RBNode[A]) extends RBNode[A]
+}
+
+sealed trait Ty
+object Ty {
+  final case class int() extends Ty
+  final case class bool() extends Ty
+}
+
+sealed trait TypeError
+object TypeError {
+  final case class unboundVar(x: String) extends TypeError
+  final case class unknownFun(f: String) extends TypeError
+  final case class arityMismatch(f: String) extends TypeError
+  final case class typeMismatch() extends TypeError
+}
+
+sealed trait UnOp
+object UnOp {
+  final case class neg() extends UnOp
+  final case class notB() extends UnOp
+}
+
 def Bool_and(x: Boolean, y: Boolean): Boolean =
   (x match {
     case false => false
@@ -60,11 +136,80 @@ def Color_describe(x0: Color): String =
     case Color.blue() => "blue"
   })
 
+def FunDef_sig(d: FunDef): (String, (List[Ty], Ty)) =
+  (d.name, (List_map[(String, Ty), Ty](((x1: (String, Ty)) => (x1._2)), d.params), d.retTy))
+
+def List_map[A, B](f: (A) => B, l: List[A]): List[B] =
+  (l match {
+    case Nil => Nil
+    case (head :: tail) => (f(head) :: List_map[A, B](f, tail))
+  })
+
 def PExp_opt(e: PExp): PExp =
   PExp.alt(e, PExp.eps())
 
 def PExp_plus(e: PExp): PExp =
   PExp.seq(e, PExp.star(e))
+
+def RBNode_balance[A](c: RBColor, l: RBNode[A], k: String, v: A, r: RBNode[A]): RBNode[A] =
+  ((c, l, r) match {
+    case (RBColor.black(), RBNode.node(RBColor.red(), RBNode.node(RBColor.red(), a, xk, xv, b), yk, yv, c_p), r_1) => RBNode.node[A](RBColor.red(), RBNode.node[A](RBColor.black(), a, xk, xv, b), yk, yv, RBNode.node[A](RBColor.black(), c_p, k, v, r_1))
+    case (RBColor.black(), RBNode.node(RBColor.red(), a, xk, xv, RBNode.node(RBColor.red(), b, yk, yv, c_p)), r_1) => RBNode.node[A](RBColor.red(), RBNode.node[A](RBColor.black(), a, xk, xv, b), yk, yv, RBNode.node[A](RBColor.black(), c_p, k, v, r_1))
+    case (RBColor.black(), l_1, RBNode.node(RBColor.red(), RBNode.node(RBColor.red(), b, yk, yv, c_p), zk, zv, d)) => RBNode.node[A](RBColor.red(), RBNode.node[A](RBColor.black(), l_1, k, v, b), yk, yv, RBNode.node[A](RBColor.black(), c_p, zk, zv, d))
+    case (RBColor.black(), l_1, RBNode.node(RBColor.red(), b, yk, yv, RBNode.node(RBColor.red(), c_p, zk, zv, d))) => RBNode.node[A](RBColor.red(), RBNode.node[A](RBColor.black(), l_1, k, v, b), yk, yv, RBNode.node[A](RBColor.black(), c_p, zk, zv, d))
+    case (c_1, l_1, r_1) => RBNode.node[A](c_1, l_1, k, v, r_1)
+  })
+
+def RBNode_blacken[A](x0: RBNode[A]): RBNode[A] =
+  (x0 match {
+    case RBNode.leaf() => RBNode.leaf[A]()
+    case RBNode.node(c, l, k, v, r) => RBNode.node[A](RBColor.black(), l, k, v, r)
+  })
+
+@annotation.tailrec
+def RBNode_find_u3f[A](x0: RBNode[A], x1: String): Option[A] =
+  (x0 match {
+    case RBNode.leaf() => None
+    case RBNode.node(c, l, k, v, r) => (cmpStr(x1, k) match {
+    case Cmp.lt() => RBNode_find_u3f[A](l, x1)
+    case Cmp.gt() => RBNode_find_u3f[A](r, x1)
+    case Cmp.eq() => Some(v)
+  })
+  })
+
+def RBNode_fromList[A](x0: List[(String, A)]): RBNode[A] =
+  (x0 match {
+    case Nil => RBNode.leaf[A]()
+    case ((k, v) :: rest) => RBNode_insert[A](RBNode_fromList[A](rest), k, v)
+  })
+
+def RBNode_ins[A](key: String, `val`: A, x2: RBNode[A]): RBNode[A] =
+  (x2 match {
+    case RBNode.leaf() => RBNode.node[A](RBColor.red(), RBNode.leaf[A](), key, `val`, RBNode.leaf[A]())
+    case RBNode.node(c, l, k, v, r) => (cmpStr(key, k) match {
+    case Cmp.lt() => RBNode_balance[A](c, RBNode_ins[A](key, `val`, l), k, v, r)
+    case Cmp.gt() => RBNode_balance[A](c, l, k, v, RBNode_ins[A](key, `val`, r))
+    case Cmp.eq() => RBNode.node[A](c, l, key, `val`, r)
+  })
+  })
+
+def RBNode_insert[A](t: RBNode[A], key: String, `val`: A): RBNode[A] =
+  RBNode_blacken[A](RBNode_ins[A](key, `val`, t))
+
+def Ty_beq(x0: Ty, x1: Ty): Boolean =
+  ((x0, x1) match {
+    case (Ty.int(), Ty.int()) => true
+    case (Ty.bool(), Ty.bool()) => true
+    case (x2, x3) => false
+  })
+
+def TypeError_render(x0: TypeError): String =
+  (x0 match {
+    case TypeError.unboundVar(x_1) => ("UnboundVar:" + x_1)
+    case TypeError.unknownFun(f) => ("UnknownFun:" + f)
+    case TypeError.arityMismatch(f) => ("ArityMismatch:" + f)
+    case TypeError.typeMismatch() => "TypeMismatch"
+  })
 
 def applyF(g: (BigInt) => BigInt, n: BigInt): BigInt =
   g(n)
@@ -72,11 +217,44 @@ def applyF(g: (BigInt) => BigInt, n: BigInt): BigInt =
 def area(w: BigInt, h: BigInt): BigInt =
   (w * h)
 
+def badArity: Program =
+  Program((FunDef("id1", (("x", Ty.int()) :: Nil), Ty.int(), Expr.`var`("x")) :: Nil), Expr.call("id1", Args.nil()))
+
+def badMismatch: Program =
+  Program(Nil, Expr.binop(BinOp.add(), Expr.intLit(BigInt(1)), Expr.boolLit(true)))
+
+def badUnbound: Program =
+  Program(Nil, Expr.`var`("ghost"))
+
+def badUnknownFun: Program =
+  Program(Nil, Expr.call("nope", Args.nil()))
+
 def beqChar(a: BigInt, b: BigInt): Boolean =
   (a == b)
 
+def beqStr(a: String, b: String): Boolean =
+  (cmpStr(a, b) match {
+    case Cmp.eq() => true
+    case x3 => false
+  })
+
 def bigLit: BigInt =
   BigInt("5000000000")
+
+def binOpSig(x0: BinOp): (Ty, (Ty, Ty)) =
+  (x0 match {
+    case BinOp.add() => (Ty.int(), (Ty.int(), Ty.int()))
+    case BinOp.sub() => (Ty.int(), (Ty.int(), Ty.int()))
+    case BinOp.mul() => (Ty.int(), (Ty.int(), Ty.int()))
+    case BinOp.div() => (Ty.int(), (Ty.int(), Ty.int()))
+    case BinOp.mod() => (Ty.int(), (Ty.int(), Ty.int()))
+    case BinOp.lt() => (Ty.int(), (Ty.int(), Ty.bool()))
+    case BinOp.le() => (Ty.int(), (Ty.int(), Ty.bool()))
+    case BinOp.eqI() => (Ty.int(), (Ty.int(), Ty.bool()))
+    case BinOp.eqB() => (Ty.bool(), (Ty.bool(), Ty.bool()))
+    case BinOp.andB() => (Ty.bool(), (Ty.bool(), Ty.bool()))
+    case BinOp.orB() => (Ty.bool(), (Ty.bool(), Ty.bool()))
+  })
 
 def c0: BigInt =
   BigInt(5)
@@ -94,10 +272,45 @@ def captureD(c0_1: BigInt): BigInt =
   (c0 + c0_1)
 
 def cases: List[(String, String)] =
-  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: (("103-large-literal", renderNat(bigLit)) :: (("200-peg-digits-ok", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("123")))) :: (("201-peg-digits-trail", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("12a")))) :: (("202-peg-digits-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("")))) :: (("203-peg-missing-nt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(9)), RT.stringToList("1")))) :: (("204-peg-kw-ok", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("if x")))) :: (("205-peg-kw-guard", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("iffy")))) :: (("206-peg-not-compose", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.notP(PExp.nt(BigInt(0))), RT.stringToList("iffy")))) :: (("207-peg-fuel-out", renderPeg(pegRun(digitGrammar, BigInt(0), PExp.nt(BigInt(0)), RT.stringToList("1")))) :: (("208-peg-star-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39))), RT.stringToList("abc")))) :: (("209-peg-opt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp_opt(PExp.chr(BigInt(0x78))), RT.stringToList("abc")))) :: Nil))))))))))))))))))))))))))))
+  (("000-nat-sub-underflow", renderNat(clampSub(BigInt(3), BigInt(5)))) :: (("001-nat-sub-normal", renderNat(clampSub(BigInt(5), BigInt(3)))) :: (("002-int-ediv-neg", renderInt(divModSum((-BigInt(7)), BigInt(2)))) :: (("003-int-ediv-negdiv", renderInt(divModSum(BigInt(7), (-BigInt(2))))) :: (("004-bigint-fact25", renderNat(fact(BigInt(25)))) :: (("005-fact-10", renderNat(fact(BigInt(10)))) :: (("006-fib-20", renderNat(fib(BigInt(20)))) :: (("007-gcd", renderNat(gcd(BigInt(48), BigInt(36)))) :: { val x3: List[(String, String)] = (("012-bool-true", renderBool(true)) :: (("013-bool-false", renderBool(false)) :: (("100-capture-lambda", renderNat(cap1(BigInt(42)))) :: (("101-capture-sanitize", renderNat(capB(BigInt(3), BigInt(5)))) :: (("102-capture-global", renderNat(captureD(BigInt(10)))) :: { val x1: List[(String, String)] = { val x0: List[(String, String)] = (("311-tc-evenodd", renderTC(checkProgram(evenOddProg))) :: (("320-tc-unbound", renderTC(checkProgram(badUnbound))) :: (("321-tc-mismatch", renderTC(checkProgram(badMismatch))) :: (("322-tc-unknown", renderTC(checkProgram(badUnknownFun))) :: (("323-tc-arity", renderTC(checkProgram(badArity))) :: Nil))))); (("208-peg-star-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.star(PExp.range(BigInt(0x30), BigInt(0x39))), RT.stringToList("abc")))) :: (("209-peg-opt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp_opt(PExp.chr(BigInt(0x78))), RT.stringToList("abc")))) :: (("300-rbmap-find", rbDemo) :: (("310-tc-fact", renderTC(checkProgram(factProg))) :: x0)))) }; { val x2: List[(String, String)] = (("203-peg-missing-nt", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(9)), RT.stringToList("1")))) :: (("204-peg-kw-ok", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("if x")))) :: (("205-peg-kw-guard", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("iffy")))) :: (("206-peg-not-compose", renderPeg(pegRun(kwIfGrammar, BigInt(100), PExp.notP(PExp.nt(BigInt(0))), RT.stringToList("iffy")))) :: (("207-peg-fuel-out", renderPeg(pegRun(digitGrammar, BigInt(0), PExp.nt(BigInt(0)), RT.stringToList("1")))) :: x1))))); (("103-large-literal", renderNat(bigLit)) :: (("200-peg-digits-ok", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("123")))) :: (("201-peg-digits-trail", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("12a")))) :: (("202-peg-digits-empty", renderPeg(pegRun(digitGrammar, BigInt(100), PExp.nt(BigInt(0)), RT.stringToList("")))) :: x2)))) } }))))); (("008-gcd-zero", renderNat(gcd(BigInt(0), BigInt(5)))) :: (("009-color", describeColor(Color.green())) :: (("010-greet", greet("corpus")) :: (("011-shift-proj", renderNat(shift(origin, BigInt(3)).x)) :: x3)))) }))))))))
+
+@annotation.tailrec
+def checkFuns(S: List[(String, (List[Ty], Ty))], x1: List[FunDef]): Either[TypeError, Unit] =
+  (x1 match {
+    case Nil => Right(())
+    case (d :: rest) => (typecheck(S, d.params, d.body) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4) => (if (Ty_beq(_u3c4, d.retTy) == true) then checkFuns(S, rest) else Left(TypeError.typeMismatch()))
+  })
+  })
+
+def checkProgram(p: Program): Either[TypeError, Ty] =
+  (checkFuns(List_map[FunDef, (String, (List[Ty], Ty))](FunDef_sig, p.funs), p.funs) match {
+    case Left(er) => Left(er)
+    case Right(x2) => typecheck(List_map[FunDef, (String, (List[Ty], Ty))](FunDef_sig, p.funs), Nil, p.main)
+  })
 
 def clampSub(a: BigInt, b: BigInt): BigInt =
   RT.natSub(a, b)
+
+def cmpChar(a: BigInt, b: BigInt): Cmp =
+  (if ((a < b) == true) then Cmp.lt() else (if ((b < a) == true) then Cmp.gt() else Cmp.eq()))
+
+@annotation.tailrec
+def cmpChars(x0: List[BigInt], x1: List[BigInt]): Cmp =
+  ((x0, x1) match {
+    case (Nil, Nil) => Cmp.eq()
+    case (Nil, (head :: tail)) => Cmp.lt()
+    case ((head :: tail), Nil) => Cmp.gt()
+    case ((a :: as), (b :: bs)) => (cmpChar(a, b) match {
+    case Cmp.lt() => Cmp.lt()
+    case Cmp.gt() => Cmp.gt()
+    case Cmp.eq() => cmpChars(as, bs)
+  })
+  })
+
+def cmpStr(a: String, b: String): Cmp =
+  cmpChars(RT.stringToList(a), RT.stringToList(b))
 
 def describeColor(c: Color): String =
   Color_describe(c)
@@ -108,11 +321,17 @@ def digitGrammar: Grammar =
 def divModSum(a: BigInt, b: BigInt): BigInt =
   (RT.intDiv(a, b) + RT.intMod(a, b))
 
+def evenOddProg: Program =
+  Program((FunDef("even", (("n", Ty.int()) :: Nil), Ty.bool(), Expr.ite(Expr.binop(BinOp.eqI(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.boolLit(true), Expr.call("odd", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil())))) :: (FunDef("odd", (("n", Ty.int()) :: Nil), Ty.bool(), Expr.ite(Expr.binop(BinOp.eqI(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.boolLit(false), Expr.call("even", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil())))) :: Nil)), Expr.call("even", Args.cons(Expr.intLit(BigInt(10)), Args.nil())))
+
 def fact(x0: BigInt): BigInt =
   (x0 match {
     case _g0 if _g0 == BigInt(0) => BigInt(1)
     case _g0 if _g0 >= 1 => { val n = _g0 - 1; ((n + BigInt(1)) * fact(n)) }
   })
+
+def factProg: Program =
+  Program((FunDef("fact", (("n", Ty.int()) :: Nil), Ty.int(), Expr.ite(Expr.binop(BinOp.le(), Expr.`var`("n"), Expr.intLit(BigInt(0))), Expr.intLit(BigInt(1)), Expr.binop(BinOp.mul(), Expr.`var`("n"), Expr.call("fact", Args.cons(Expr.binop(BinOp.sub(), Expr.`var`("n"), Expr.intLit(BigInt(1))), Args.nil()))))) :: Nil), Expr.call("fact", Args.cons(Expr.intLit(BigInt(5)), Args.nil())))
 
 def fib(x0: BigInt): BigInt =
   (x0 match {
@@ -138,6 +357,20 @@ def lenChars(x0: List[BigInt]): BigInt =
   (x0 match {
     case Nil => BigInt(0)
     case (head :: rest) => (BigInt(1) + lenChars(rest))
+  })
+
+@annotation.tailrec
+def lookupSig(x0: List[(String, (List[Ty], Ty))], x1: String): Option[(List[Ty], Ty)] =
+  (x0 match {
+    case Nil => None
+    case ((g, s) :: rest) => (if (beqStr(x1, g) == true) then Some(s) else lookupSig(rest, x1))
+  })
+
+@annotation.tailrec
+def lookupTy(x0: List[(String, Ty)], x1: String): Option[Ty] =
+  (x0 match {
+    case Nil => None
+    case ((y, _u3c4) :: rest) => (if (beqStr(x1, y) == true) then Some(_u3c4) else lookupTy(rest, x1))
   })
 
 def origin: Point =
@@ -199,6 +432,12 @@ def pegRun(g: Grammar, x1: BigInt, x2: PExp, x3: List[BigInt]): Option[Outcome] 
   }) }
   })
 
+def rbDemo: String =
+  ((RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "a"), RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "c"), RBNode_find_u3f[BigInt](RBNode_fromList[BigInt]((("b", BigInt(2)) :: (("a", BigInt(1)) :: (("c", BigInt(3)) :: (("a", BigInt(10)) :: Nil))))), "zz")) match {
+    case (Some(a), Some(c_p), None) => (((renderNat(a) + ",") + renderNat(c_p)) + ",miss")
+    case (x2, x3, x4) => "unexpected"
+  })
+
 def renderBool(b: Boolean): String =
   (if (b == true) then "true" else "false")
 
@@ -213,6 +452,18 @@ def renderPeg(o: Option[Outcome]): String =
     case None => "fuel"
     case Some(Outcome.fail()) => "fail"
     case Some(Outcome.ok(t, rest)) => ("ok+" + renderNat(lenChars(rest)))
+  })
+
+def renderTC(r: Either[TypeError, Ty]): String =
+  (r match {
+    case Right(_u3c4) => ("ok:" + renderTy(_u3c4))
+    case Left(e) => ("err:" + TypeError_render(e))
+  })
+
+def renderTy(_u3c4: Ty): String =
+  (_u3c4 match {
+    case Ty.int() => "int"
+    case Ty.bool() => "bool"
   })
 
 @annotation.tailrec
@@ -232,4 +483,64 @@ def stripPrefix_u3f(x0: List[BigInt], x1: List[BigInt]): Option[List[BigInt]] =
     case (Nil, x2) => Some(x2)
     case ((head :: tail), Nil) => None
     case ((c :: cs), (d :: ds)) => (if (beqChar(c, d) == true) then stripPrefix_u3f(cs, ds) else None)
+  })
+
+def typecheck(S: List[(String, (List[Ty], Ty))], _u393: List[(String, Ty)], x2: Expr): Either[TypeError, Ty] =
+  (x2 match {
+    case Expr.intLit(n) => Right(Ty.int())
+    case Expr.boolLit(b) => Right(Ty.bool())
+    case Expr.`var`(x_1) => (lookupTy(_u393, x_1) match {
+    case Some(_u3c4) => Right(_u3c4)
+    case None => Left(TypeError.unboundVar(x_1))
+  })
+    case Expr.unop(op, e) => (typecheck(S, _u393, e) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4) => (if (Ty_beq(_u3c4, (unOpSig(op)._1)) == true) then Right((unOpSig(op)._2)) else Left(TypeError.typeMismatch()))
+  })
+    case Expr.binop(op, l, r) => (typecheck(S, _u393, l) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4) => (typecheck(S, _u393, r) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4_1) => (if (Ty_beq(_u3c4, (binOpSig(op)._1)) == true) then (if (Ty_beq(_u3c4_1, ((binOpSig(op)._2)._1)) == true) then Right(((binOpSig(op)._2)._2)) else Left(TypeError.typeMismatch())) else Left(TypeError.typeMismatch()))
+  })
+  })
+    case Expr.ite(c, t, e) => (typecheck(S, _u393, c) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4) => (if (Ty_beq(_u3c4, Ty.bool()) == true) then (typecheck(S, _u393, t) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4_1) => (typecheck(S, _u393, e) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4_2) => (if (Ty_beq(_u3c4_1, _u3c4_2) == true) then Right(_u3c4_1) else Left(TypeError.typeMismatch()))
+  })
+  }) else Left(TypeError.typeMismatch()))
+  })
+    case Expr.letE(x_1, bound, body) => (typecheck(S, _u393, bound) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4) => typecheck(S, ((x_1, _u3c4) :: _u393), body)
+  })
+    case Expr.call(f, args) => (lookupSig(S, f) match {
+    case None => Left(TypeError.unknownFun(f))
+    case Some((tys, ret)) => (typecheckArgs(S, _u393, f, args, tys) match {
+    case Left(er) => Left(er)
+    case Right(x39) => Right(ret)
+  })
+  })
+  })
+
+@annotation.tailrec
+def typecheckArgs(S: List[(String, (List[Ty], Ty))], _u393: List[(String, Ty)], f: String, x3: Args, x4: List[Ty]): Either[TypeError, Unit] =
+  ((x3, x4) match {
+    case (Args.nil(), Nil) => Right(())
+    case (Args.nil(), (head :: tail)) => Left(TypeError.arityMismatch(f))
+    case (Args.cons(e, rest), Nil) => Left(TypeError.arityMismatch(f))
+    case (Args.cons(e, rest), (_u3c4 :: tys)) => (typecheck(S, _u393, e) match {
+    case Left(er) => Left(er)
+    case Right(_u3c4_1) => (if (Ty_beq(_u3c4_1, _u3c4) == true) then typecheckArgs(S, _u393, f, rest, tys) else Left(TypeError.typeMismatch()))
+  })
+  })
+
+def unOpSig(x0: UnOp): (Ty, Ty) =
+  (x0 match {
+    case UnOp.neg() => (Ty.int(), Ty.int())
+    case UnOp.notB() => (Ty.bool(), Ty.bool())
   })
