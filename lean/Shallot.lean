@@ -15,4 +15,6 @@ import Shallot.Data.RBMap
 import Shallot.Lang.Ast
 import Shallot.Lang.Typing
 import Shallot.Lang.TypeCheck
+import Shallot.Lang.Eval
+import Shallot.Opt.ConstFold
 import Shallot.Tests.Guards

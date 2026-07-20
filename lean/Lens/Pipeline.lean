@@ -24,7 +24,9 @@ def defaultRoots : List Name :=
    -- M3: PEG interpreter (nested matchers, extractor v2)
    `Shallot.pegRun, `Shallot.renderPeg,
    -- M5: typechecker (mutual recursion) + RBMap (polymorphic defs)
-   `Shallot.checkProgram, `Shallot.renderTC, `Shallot.rbDemo]
+   `Shallot.checkProgram, `Shallot.renderTC, `Shallot.rbDemo,
+   -- M7: interpreter + optimizer
+   `Shallot.runProgram, `Shallot.optProgram, `Shallot.renderEval]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

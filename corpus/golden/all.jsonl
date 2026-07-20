@@ -33,3 +33,12 @@
 {"case":"321-tc-mismatch","phase":"eval","status":"ok","result":"err:TypeMismatch"}
 {"case":"322-tc-unknown","phase":"eval","status":"ok","result":"err:UnknownFun:nope"}
 {"case":"323-tc-arity","phase":"eval","status":"ok","result":"err:ArityMismatch:id1"}
+{"case":"400-eval-fact","phase":"eval","status":"ok","result":"ok:120"}
+{"case":"401-eval-evenodd","phase":"eval","status":"ok","result":"ok:true"}
+{"case":"402-eval-divzero","phase":"eval","status":"ok","result":"err:DivByZero"}
+{"case":"403-eval-unbound","phase":"eval","status":"ok","result":"err:StuckUnbound:ghost"}
+{"case":"404-eval-fuel","phase":"eval","status":"ok","result":"fuel"}
+{"case":"410-opt-foldy-direct","phase":"eval","status":"ok","result":"ok:30"}
+{"case":"411-opt-foldy-opt","phase":"eval","status":"ok","result":"ok:30"}
+{"case":"412-opt-fact-opt","phase":"eval","status":"ok","result":"ok:120"}
+{"case":"420-eval-sum-20000","phase":"eval","status":"ok","result":"ok:200010000"}

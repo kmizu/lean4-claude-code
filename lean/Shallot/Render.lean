@@ -1,5 +1,6 @@
 import Shallot.Peg.Syntax
 import Shallot.Lang.TypeCheck
+import Shallot.Lang.Eval
 
 /-!
 # Canonical result renderer
@@ -38,5 +39,16 @@ def renderTC (r : Except TypeError Ty) : String :=
   match r with
   | .ok τ => "ok:" ++ renderTy τ
   | .error e => "err:" ++ e.render
+
+def renderValue (v : Value) : String :=
+  match v with
+  | .vint n => renderInt n
+  | .vbool b => renderBool b
+
+def renderEval (r : Option (Except RtErr Value)) : String :=
+  match r with
+  | none => "fuel"
+  | some (.error e) => "err:" ++ e.render
+  | some (.ok v) => "ok:" ++ renderValue v
 
 end Shallot

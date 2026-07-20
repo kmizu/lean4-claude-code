@@ -3,6 +3,8 @@ import Shallot.Render
 import Shallot.Torture
 import Shallot.Peg.Interp
 import Shallot.Lang.TypeCheck
+import Shallot.Lang.Eval
+import Shallot.Opt.ConstFold
 import Shallot.Data.RBMap
 
 /-!
@@ -68,6 +70,29 @@ def badArity : Program :=
       { name := "id1", params := [("x", .int)], retTy := .int, body := .var "x" } ],
     main := .call "id1" .nil }
 
+/-- Deep recursion: `sum(n) = if n <= 0 then 0 else n + sum(n-1)` — fuel and
+stack stress (corpus 07x runs it at 20000 on both sides). -/
+def sumProg (n : Int) : Program :=
+  { funs := [
+      { name := "sum", params := [("n", .int)], retTy := .int,
+        body := .ite (.binop .le (.var "n") (.intLit 0))
+          (.intLit 0)
+          (.binop .add (.var "n")
+            (.call "sum" (.cons (.binop .sub (.var "n") (.intLit 1)) .nil))) } ],
+    main := .call "sum" (.cons (.intLit n) .nil) }
+
+/-- Division-by-zero must surface as `divByZero`, not a stuck error. -/
+def divZeroProg : Program :=
+  { funs := [], main := .binop .div (.intLit 7) (.intLit 0) }
+
+/-- Foldable expression: `(2 + 3) * (10 - 4)` under an if with known cond. -/
+def foldyProg : Program :=
+  { funs := [],
+    main := .ite (.binop .lt (.intLit 1) (.intLit 2))
+      (.binop .mul (.binop .add (.intLit 2) (.intLit 3))
+                   (.binop .sub (.intLit 10) (.intLit 4)))
+      (.binop .div (.intLit 1) (.intLit 0)) }
+
 /-- RBMap smoke sequence: fromList + find hits and misses. -/
 def rbDemo : String :=
   let t := RBNode.fromList [("b", 2), ("a", 1), ("c", 3), ("a", 10)]
@@ -114,6 +139,18 @@ def cases : List (String × String) :=
     ("320-tc-unbound",        renderTC (checkProgram badUnbound)),
     ("321-tc-mismatch",       renderTC (checkProgram badMismatch)),
     ("322-tc-unknown",        renderTC (checkProgram badUnknownFun)),
-    ("323-tc-arity",          renderTC (checkProgram badArity)) ]
+    ("323-tc-arity",          renderTC (checkProgram badArity)),
+    -- 05x: interpreter through extraction
+    ("400-eval-fact",         renderEval (runProgram factProg 1000)),
+    ("401-eval-evenodd",      renderEval (runProgram evenOddProg 1000)),
+    ("402-eval-divzero",      renderEval (runProgram divZeroProg 1000)),
+    ("403-eval-unbound",      renderEval (runProgram badUnbound 1000)),
+    ("404-eval-fuel",         renderEval (runProgram (sumProg 100) 3)),
+    -- 06x-prep: optimizer agreement (semantic preservation checked by diff)
+    ("410-opt-foldy-direct",  renderEval (runProgram foldyProg 1000)),
+    ("411-opt-foldy-opt",     renderEval (runProgram (optProgram foldyProg) 1000)),
+    ("412-opt-fact-opt",      renderEval (runProgram (optProgram factProg) 1000)),
+    -- 07x: deep recursion (stack stress on the Scala side)
+    ("420-eval-sum-20000",    renderEval (runProgram (sumProg 20000) 100000)) ]
 
 end Shallot

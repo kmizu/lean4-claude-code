@@ -9,10 +9,14 @@ object Main:
     * runner. Key order and formatting must match `lean/Runner.lean`.
     */
   def dumpJsonl: String =
-    val lines = shallot.gen.cases.map { case (id, result) =>
-      s"""{"case":"$id","phase":"eval","status":"ok","result":"$result"}"""
+    // Deep-recursion corpus cases (07x) need a big stack; the extracted
+    // interpreter is fuel-bounded, non-tail structural recursion.
+    shallot.rt.Stack.run(256) {
+      val lines = shallot.gen.cases.map { case (id, result) =>
+        s"""{"case":"$id","phase":"eval","status":"ok","result":"$result"}"""
+      }
+      lines.mkString("", "\n", "\n")
     }
-    lines.mkString("", "\n", "\n")
 
   def main(args: Array[String]): Unit =
     args.toList match

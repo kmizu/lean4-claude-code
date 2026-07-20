@@ -313,6 +313,10 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       if h : args.size = 5 then
         return .ite (← transDecInst ctx args[2]) (← transTerm ctx args[3]) (← transTerm ctx args[4])
       else err "term" "unsupported ite arity"
+    else if c == ``Decidable.decide then
+      if h : args.size = 2 then
+        transDecInst ctx args[1]
+      else err "term" "unsupported decide arity"
     else
     -- 2. whitelisted operators
     match Builtins.findOp c with
