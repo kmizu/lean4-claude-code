@@ -32,6 +32,14 @@ inductive ExpSign where
   | minus
   | none
 
+/-- Exponent part, syntax-verbatim: `1E+5` and `1e5` differ in `upper` and
+`sign` but not in meaning — both survive the roundtrip unchanged. -/
+structure JExp where
+  /-- `'E'` (true) vs `'e'` (false), as written. -/
+  upper : Bool
+  sign : ExpSign
+  digits : List Char
+
 /-- A JSON number, syntax-verbatim.
 Well-formedness (`wfNumber`: digits are digits, `intPart` is `0` or starts
 non-zero, `fracPart`/exponent digits nonempty when present) lives in
@@ -42,8 +50,8 @@ structure JNumber where
   intPart : List Char
   /-- Fraction digits; `[]` means "no fraction part". -/
   fracPart : List Char
-  /-- Exponent: sign-as-written and digits; `Option.none` = no exponent. -/
-  expPart : Option (ExpSign × List Char)
+  /-- Exponent as written; `Option.none` = no exponent. -/
+  expPart : Option JExp
 
 mutual
   inductive JValue where
