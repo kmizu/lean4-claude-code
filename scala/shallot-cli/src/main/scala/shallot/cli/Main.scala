@@ -31,7 +31,10 @@ object Main:
         println(shallot.rt.Stack.run(256) { shallot.gen.runSource(readSource(path)) })
       case "eval" :: src :: _ =>
         println(shallot.rt.Stack.run(256) { shallot.gen.runSource(src) })
-      case "json" :: src :: _ =>
+      case "json" :: rest if rest.nonEmpty =>
+        // sbt splits program arguments on whitespace — rejoin so
+        // `shallotCli/run json {"a": [1, 2.5e3]}` sees one JSON text.
+        val src = rest.mkString(" ")
         println(shallot.rt.Stack.run(64) {
           shallot.gen.Json_parseJson(BigInt(10000000), src) match
             case Right(v) => "ok:" + shallot.gen.Json_printJson(v)
