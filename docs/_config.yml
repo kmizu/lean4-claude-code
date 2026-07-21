@@ -1,0 +1,4 @@
+theme: jekyll-theme-cayman
+title: Shallot + Lens 解説
+description: 形式検証済みPEGパーサと Lean 4 → Scala 3 抽出器 — PEGはわかるがLeanは知らない人のための読み物
+show_downloads: false
