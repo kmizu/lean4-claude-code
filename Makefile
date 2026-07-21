@@ -3,9 +3,9 @@
 
 LAKE_ENV = command -v lake >/dev/null 2>&1 || . $$HOME/.elan/env;
 
-.PHONY: verify verify-fast audit lean lake-test regen check-drift scala diff corpus-golden disksize clean
+.PHONY: verify verify-fast audit lean lake-test regen check-drift scala diff json-suite corpus-golden disksize clean
 
-verify: audit lean lake-test check-drift scala diff
+verify: audit lean lake-test check-drift scala diff json-suite
 	@echo "== make verify: ALL GREEN =="
 
 # For mid-proof iteration: source audit + proofs only.
@@ -31,6 +31,9 @@ scala:
 
 diff:
 	scripts/diff-results.sh
+
+json-suite:
+	scripts/json-suite.sh
 
 corpus-golden:
 	scripts/corpus-golden.sh

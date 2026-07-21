@@ -31,6 +31,19 @@ object Main:
         println(shallot.rt.Stack.run(256) { shallot.gen.runSource(readSource(path)) })
       case "eval" :: src :: _ =>
         println(shallot.rt.Stack.run(256) { shallot.gen.runSource(src) })
+      case "json" :: src :: _ =>
+        println(shallot.rt.Stack.run(64) {
+          shallot.gen.Json_parseJson(BigInt(10000000), src) match
+            case Right(v) => "ok:" + shallot.gen.Json_printJson(v)
+            case Left(e)  => "err:" + shallot.gen.Json_JErr_render(e)
+        })
+      case "json-suite" :: dir :: rest =>
+        val out = JsonSuite.run(dir)
+        rest match
+          case o :: _ =>
+            Files.write(Paths.get(o), out.getBytes(StandardCharsets.UTF_8))
+            System.err.println(s"shallot-cli: wrote $o")
+          case Nil => print(out)
       case "dump" :: out :: _ =>
         Files.write(Paths.get(out), dumpJsonl.getBytes(StandardCharsets.UTF_8))
         System.err.println(s"shallot-cli: wrote $out")

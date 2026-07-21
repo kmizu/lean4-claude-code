@@ -25,3 +25,7 @@ root = "Runner"
 name = "lenstests"
 root = "LensTests"
 supportInterpreter = true
+
+[[lean_exe]]
+name = "json-suite"
+root = "JsonSuite"

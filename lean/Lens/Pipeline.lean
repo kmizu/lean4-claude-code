@@ -30,7 +30,9 @@ def defaultRoots : List Name :=
    -- M9: stack VM + compiler
    `Shallot.vmRunProgram,
    -- M11: concrete syntax (verified-PEG parse → typecheck → eval)
-   `Shallot.rtOk, `Shallot.runSource]
+   `Shallot.rtOk, `Shallot.runSource,
+   -- J2: verified JSON parser (RFC 8259)
+   `Shallot.Json.parseJson, `Shallot.Json.printJson, `Shallot.Json.JErr.render]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

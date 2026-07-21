@@ -69,6 +69,47 @@ object Instr {
   final case class crash() extends Instr
 }
 
+sealed trait Json_ExpSign
+object Json_ExpSign {
+  final case class plus() extends Json_ExpSign
+  final case class minus() extends Json_ExpSign
+  final case class none() extends Json_ExpSign
+}
+
+sealed trait Json_JArray
+object Json_JArray {
+  final case class nil() extends Json_JArray
+  final case class cons(v: Json_JValue, rest: Json_JArray) extends Json_JArray
+}
+
+sealed trait Json_JErr
+object Json_JErr {
+  final case class fuelOut() extends Json_JErr
+  final case class syntaxErr() extends Json_JErr
+  final case class shape() extends Json_JErr
+  final case class loneSurrogate() extends Json_JErr
+}
+
+final case class Json_JExp(upper: Boolean, sign: Json_ExpSign, digits: List[BigInt])
+
+sealed trait Json_JMembers
+object Json_JMembers {
+  final case class nil() extends Json_JMembers
+  final case class cons(k: List[BigInt], v: Json_JValue, rest: Json_JMembers) extends Json_JMembers
+}
+
+final case class Json_JNumber(neg: Boolean, intPart: List[BigInt], fracPart: List[BigInt], expPart: Option[Json_JExp])
+
+sealed trait Json_JValue
+object Json_JValue {
+  final case class jnull() extends Json_JValue
+  final case class jbool(b: Boolean) extends Json_JValue
+  final case class jnum(n: Json_JNumber) extends Json_JValue
+  final case class jstr(s: List[BigInt]) extends Json_JValue
+  final case class jarr(vs: Json_JArray) extends Json_JValue
+  final case class jobj(ms: Json_JMembers) extends Json_JValue
+}
+
 sealed trait Outcome
 object Outcome {
   final case class fail() extends Outcome
@@ -175,6 +216,340 @@ def Color_describe(x0: Color): String =
 
 def FunDef_sig(d: FunDef): (String, (List[Ty], Ty)) =
   (d.name, (List_map[(String, Ty), Ty](((x1: (String, Ty)) => (x1._2)), d.params), d.retTy))
+
+def Json_JErr_render(x0: Json_JErr): String =
+  (x0 match {
+    case Json_JErr.fuelOut() => "FuelOut"
+    case Json_JErr.syntaxErr() => "SyntaxError"
+    case Json_JErr.shape() => "ShapeError"
+    case Json_JErr.loneSurrogate() => "LoneSurrogate"
+  })
+
+def Json_JNT_array: BigInt =
+  BigInt(5)
+
+def Json_JNT_char: BigInt =
+  BigInt(7)
+
+def Json_JNT_escape: BigInt =
+  BigInt(8)
+
+def Json_JNT_exp: BigInt =
+  BigInt(12)
+
+def Json_JNT_frac: BigInt =
+  BigInt(11)
+
+def Json_JNT_hex: BigInt =
+  BigInt(13)
+
+def Json_JNT_int: BigInt =
+  BigInt(10)
+
+def Json_JNT_jsonText: BigInt =
+  BigInt(1)
+
+def Json_JNT_member: BigInt =
+  BigInt(4)
+
+def Json_JNT_number: BigInt =
+  BigInt(9)
+
+def Json_JNT_object: BigInt =
+  BigInt(3)
+
+def Json_JNT_string: BigInt =
+  BigInt(6)
+
+def Json_JNT_value: BigInt =
+  BigInt(2)
+
+def Json_JNT_ws: BigInt =
+  BigInt(0)
+
+def Json_arrayItems(x0: PTree): Either[Json_JErr, Json_JArray] =
+  (x0 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, mT)), rest) => (Json_valueOf(mT).flatMap(((x5: Json_JValue) => (Json_arrayItems(rest).flatMap(((x6: Json_JArray) => Right(Json_JArray.cons(x5, x6))))))))
+    case PTree.starNil() => Right(Json_JArray.nil())
+    case x7 => Left(Json_JErr.shape())
+  })
+
+def Json_arrayOf(x0: PTree): Either[Json_JErr, Json_JValue] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(PTree.choiceR(t), r)) => Right(Json_JValue.jarr(Json_JArray.nil()))
+    case PTree.seq(l, PTree.seq(PTree.choiceL(PTree.seq(PTree.nodeNT(i, m0T), starT_1)), r)) => (Json_valueOf(m0T).flatMap(((x9: Json_JValue) => (Json_arrayItems(starT_1).flatMap(((x10: Json_JArray) => Right(Json_JValue.jarr(Json_JArray.cons(x9, x10)))))))))
+    case PTree.seq(l, PTree.seq(starT, r)) => Left(Json_JErr.shape())
+    case x14 => Left(Json_JErr.shape())
+  })
+
+def Json_beginArrayP: PExp =
+  Json_structTok(BigInt(0x5b))
+
+def Json_beginObjectP: PExp =
+  Json_structTok(BigInt(0x7b))
+
+def Json_charUnitOf(x0: PTree): Either[Json_JErr, BigInt] =
+  (x0 match {
+    case PTree.choiceL(t) => (PTree_chars(t) match {
+    case (c :: Nil) => Right(c)
+    case x3 => Left(Json_JErr.shape())
+  })
+    case PTree.choiceR(PTree.seq(l, PTree.nodeNT(i, escT))) => Json_escapeOf(escT)
+    case x7 => Left(Json_JErr.shape())
+  })
+
+def Json_charUnits(x0: PTree): Either[Json_JErr, List[BigInt]] =
+  (x0 match {
+    case PTree.starCons(PTree.nodeNT(i, cT), rest) => (Json_charUnitOf(cT).flatMap(((x4: BigInt) => (Json_charUnits(rest).flatMap(((x5: List[BigInt]) => Right((x4 :: x5))))))))
+    case PTree.starNil() => Right(Nil)
+    case x6 => Left(Json_JErr.shape())
+  })
+
+def Json_combineUnits(x0: List[BigInt]): Either[Json_JErr, List[BigInt]] =
+  (x0 match {
+    case Nil => Right(Nil)
+    case (u :: (lo :: rest_p)) => (if (Bool_and((BigInt(55296) <= u), (u <= BigInt(56319))) == true) then (if (Bool_and((BigInt(56320) <= lo), (lo <= BigInt(57343))) == true) then (Json_combineUnits(rest_p) match {
+    case Right(cs) => Right((((BigInt(65536) + (RT.natSub(u, BigInt(55296)) * BigInt(1024))) + RT.natSub(lo, BigInt(56320))) :: cs))
+    case Left(e) => Left(e)
+  }) else Left(Json_JErr.loneSurrogate())) else (if (Bool_and((BigInt(56320) <= u), (u <= BigInt(57343))) == true) then Left(Json_JErr.loneSurrogate()) else (Json_combineUnits((lo :: rest_p)) match {
+    case Right(cs) => Right((u :: cs))
+    case Left(e) => Left(e)
+  })))
+    case (u :: Nil) => (if (Bool_and((BigInt(55296) <= u), (u <= BigInt(56319))) == true) then Left(Json_JErr.loneSurrogate()) else (if (Bool_and((BigInt(56320) <= u), (u <= BigInt(57343))) == true) then Left(Json_JErr.loneSurrogate()) else (Json_combineUnits(Nil) match {
+    case Right(cs) => Right((u :: cs))
+    case Left(e) => Left(e)
+  })))
+  })
+
+def Json_digit19P: PExp =
+  PExp.range(BigInt(0x31), BigInt(0x39))
+
+def Json_digitP: PExp =
+  PExp.range(BigInt(0x30), BigInt(0x39))
+
+def Json_endArrayP: PExp =
+  Json_structTok(BigInt(0x5d))
+
+def Json_endObjectP: PExp =
+  Json_structTok(BigInt(0x7d))
+
+def Json_escChars(x0: List[BigInt]): List[BigInt] =
+  (x0 match {
+    case Nil => Nil
+    case (c :: rest) => (Json_escapeCp(c) ++ Json_escChars(rest))
+  })
+
+def Json_escapeCp(c: BigInt): List[BigInt] =
+  (if (beqChar(c, BigInt(0x22)) == true) then (BigInt(0x5c) :: (BigInt(0x22) :: Nil)) else (if (beqChar(c, BigInt(0x5c)) == true) then (BigInt(0x5c) :: (BigInt(0x5c) :: Nil)) else (if ((c < BigInt(32)) == true) then (BigInt(0x5c) :: (BigInt(0x75) :: Json_hex4(c))) else (c :: Nil))))
+
+def Json_escapeOf(x0: PTree): Either[Json_JErr, BigInt] =
+  (x0 match {
+    case PTree.choiceL(t) => Right(BigInt(0x22))
+    case PTree.choiceR(PTree.choiceL(t)) => Right(BigInt(0x5c))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceL(t))) => Right(BigInt(0x2f))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(t)))) => Right(BigInt(8))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(t))))) => Right(BigInt(12))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(t)))))) => Right(BigInt(10))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(t))))))) => Right(BigInt(13))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(t)))))))) => Right(BigInt(9))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.seq(l, PTree.seq(PTree.nodeNT(i, h1), PTree.seq(PTree.nodeNT(i_1, h2), PTree.seq(PTree.nodeNT(i_2, h3), PTree.nodeNT(i_3, h4))))))))))))) => (Json_hexOf(h1).flatMap(((a: BigInt) => (Json_hexOf(h2).flatMap(((b: BigInt) => (Json_hexOf(h3).flatMap(((c: BigInt) => (Json_hexOf(h4).flatMap(((d: BigInt) => Right(((((((a * BigInt(16)) + b) * BigInt(16)) + c) * BigInt(16)) + d))))))))))))))
+    case x22 => Left(Json_JErr.shape())
+  })
+
+def Json_expOf(x0: PTree): Either[Json_JErr, Json_JExp] =
+  (x0 match {
+    case PTree.seq(PTree.choiceL(t), PTree.seq(starT, r)) => (Right(false).flatMap(((upper: Boolean) => { val x6: (Json_ExpSign) => Either[Json_JErr, Json_JExp] = ((sign: Json_ExpSign) => Right(Json_JExp(upper, sign, PTree_chars(r)))); (starT match {
+    case PTree.choiceR(x7) => (Right(Json_ExpSign.none()).flatMap(((sign: Json_ExpSign) => x6(sign))))
+    case PTree.choiceL(PTree.choiceL(x9)) => (Right(Json_ExpSign.minus()).flatMap(((sign: Json_ExpSign) => x6(sign))))
+    case PTree.choiceL(PTree.choiceR(x11)) => (Right(Json_ExpSign.plus()).flatMap(((sign: Json_ExpSign) => x6(sign))))
+    case x13 => (Left(Json_JErr.shape()).flatMap(((sign: Json_ExpSign) => x6(sign))))
+  }) })))
+    case PTree.seq(PTree.choiceR(t), PTree.seq(starT, r)) => (Right(true).flatMap(((upper: Boolean) => { val x20: (Json_ExpSign) => Either[Json_JErr, Json_JExp] = ((sign: Json_ExpSign) => Right(Json_JExp(upper, sign, PTree_chars(r)))); (starT match {
+    case PTree.choiceR(x21) => (Right(Json_ExpSign.none()).flatMap(((sign: Json_ExpSign) => x20(sign))))
+    case PTree.choiceL(PTree.choiceL(x23)) => (Right(Json_ExpSign.minus()).flatMap(((sign: Json_ExpSign) => x20(sign))))
+    case PTree.choiceL(PTree.choiceR(x25)) => (Right(Json_ExpSign.plus()).flatMap(((sign: Json_ExpSign) => x20(sign))))
+    case x27 => (Left(Json_JErr.shape()).flatMap(((sign: Json_ExpSign) => x20(sign))))
+  }) })))
+    case PTree.seq(l, PTree.seq(starT, r)) => (Left(Json_JErr.shape()).flatMap(((upper: Boolean) => { val x34: (Json_ExpSign) => Either[Json_JErr, Json_JExp] = ((sign: Json_ExpSign) => Right(Json_JExp(upper, sign, PTree_chars(r)))); (starT match {
+    case PTree.choiceR(x35) => (Right(Json_ExpSign.none()).flatMap(((sign: Json_ExpSign) => x34(sign))))
+    case PTree.choiceL(PTree.choiceL(x37)) => (Right(Json_ExpSign.minus()).flatMap(((sign: Json_ExpSign) => x34(sign))))
+    case PTree.choiceL(PTree.choiceR(x39)) => (Right(Json_ExpSign.plus()).flatMap(((sign: Json_ExpSign) => x34(sign))))
+    case x41 => (Left(Json_JErr.shape()).flatMap(((sign: Json_ExpSign) => x34(sign))))
+  }) })))
+    case x43 => Left(Json_JErr.shape())
+  })
+
+def Json_fracOf(x0: PTree): Either[Json_JErr, List[BigInt]] =
+  (x0 match {
+    case PTree.seq(l, digitsT) => Right(PTree_chars(digitsT))
+    case x3 => Left(Json_JErr.shape())
+  })
+
+def Json_hex4(n: BigInt): List[BigInt] =
+  (Json_hexDigitChar(RT.natMod(RT.natDiv(n, BigInt(4096)), BigInt(16))) :: (Json_hexDigitChar(RT.natMod(RT.natDiv(n, BigInt(256)), BigInt(16))) :: (Json_hexDigitChar(RT.natMod(RT.natDiv(n, BigInt(16)), BigInt(16))) :: (Json_hexDigitChar(RT.natMod(n, BigInt(16))) :: Nil))))
+
+def Json_hexDigitChar(n: BigInt): BigInt =
+  (if (n < BigInt(10)) then (BigInt(0x30) + n) else (BigInt(0x61) + RT.natSub(n, BigInt(10))))
+
+def Json_hexOf(x0: PTree): Either[Json_JErr, BigInt] =
+  (PTree_chars(x0) match {
+    case (c :: Nil) => Right(Json_hexVal(c))
+    case x2 => Left(Json_JErr.shape())
+  })
+
+def Json_hexVal(c: BigInt): BigInt =
+  (if (Bool_and(leChar(BigInt(0x30), c), leChar(c, BigInt(0x39))) == true) then RT.natSub(c, BigInt(0x30)) else (if (Bool_and(leChar(BigInt(0x61), c), leChar(c, BigInt(0x66))) == true) then (RT.natSub(c, BigInt(0x61)) + BigInt(10)) else (RT.natSub(c, BigInt(0x41)) + BigInt(10))))
+
+def Json_intOf(t: PTree): List[BigInt] =
+  PTree_chars(t)
+
+def Json_jsonGrammar: Grammar =
+  Grammar(Json_jsonRules, Json_JNT_jsonText)
+
+def Json_jsonRules: List[PExp] =
+  (PExp.star(PExp.alt(PExp.chr(BigInt(0x20)), PExp.alt(PExp.chr(BigInt(0x9)), PExp.alt(PExp.chr(BigInt(0xa)), PExp.chr(BigInt(0xd)))))) :: (PExp.seq(PExp.nt(Json_JNT_ws), PExp.seq(PExp.nt(Json_JNT_value), PExp.seq(PExp.nt(Json_JNT_ws), PExp.notP(PExp.any())))) :: (PExp.alt(PExp.lit(RT.stringToList("false")), PExp.alt(PExp.lit(RT.stringToList("null")), PExp.alt(PExp.lit(RT.stringToList("true")), PExp.alt(PExp.nt(Json_JNT_object), PExp.alt(PExp.nt(Json_JNT_array), PExp.alt(PExp.nt(Json_JNT_number), PExp.nt(Json_JNT_string))))))) :: (PExp.seq(Json_beginObjectP, PExp.seq(PExp_opt(PExp.seq(PExp.nt(Json_JNT_member), PExp.star(PExp.seq(Json_valueSepP, PExp.nt(Json_JNT_member))))), Json_endObjectP)) :: (PExp.seq(PExp.nt(Json_JNT_string), PExp.seq(Json_nameSepP, PExp.nt(Json_JNT_value))) :: (PExp.seq(Json_beginArrayP, PExp.seq(PExp_opt(PExp.seq(PExp.nt(Json_JNT_value), PExp.star(PExp.seq(Json_valueSepP, PExp.nt(Json_JNT_value))))), Json_endArrayP)) :: (PExp.seq(PExp.chr(BigInt(0x22)), PExp.seq(PExp.star(PExp.nt(Json_JNT_char)), PExp.chr(BigInt(0x22)))) :: (PExp.alt(Json_unescapedP, PExp.seq(PExp.chr(BigInt(0x5c)), PExp.nt(Json_JNT_escape))) :: (PExp.alt(PExp.chr(BigInt(0x22)), PExp.alt(PExp.chr(BigInt(0x5c)), PExp.alt(PExp.chr(BigInt(0x2f)), PExp.alt(PExp.chr(BigInt(0x62)), PExp.alt(PExp.chr(BigInt(0x66)), PExp.alt(PExp.chr(BigInt(0x6e)), PExp.alt(PExp.chr(BigInt(0x72)), PExp.alt(PExp.chr(BigInt(0x74)), PExp.seq(PExp.chr(BigInt(0x75)), PExp.seq(PExp.nt(Json_JNT_hex), PExp.seq(PExp.nt(Json_JNT_hex), PExp.seq(PExp.nt(Json_JNT_hex), PExp.nt(Json_JNT_hex))))))))))))) :: (PExp.seq(PExp_opt(PExp.chr(BigInt(0x2d))), PExp.seq(PExp.nt(Json_JNT_int), PExp.seq(PExp_opt(PExp.nt(Json_JNT_frac)), PExp_opt(PExp.nt(Json_JNT_exp))))) :: (PExp.alt(PExp.chr(BigInt(0x30)), PExp.seq(Json_digit19P, PExp.star(Json_digitP))) :: (PExp.seq(PExp.chr(BigInt(0x2e)), PExp.seq(Json_digitP, PExp.star(Json_digitP))) :: (PExp.seq(PExp.alt(PExp.chr(BigInt(0x65)), PExp.chr(BigInt(0x45))), PExp.seq(PExp_opt(PExp.alt(PExp.chr(BigInt(0x2d)), PExp.chr(BigInt(0x2b)))), PExp.seq(Json_digitP, PExp.star(Json_digitP)))) :: (PExp.alt(Json_digitP, PExp.alt(PExp.range(BigInt(0x61), BigInt(0x66)), PExp.range(BigInt(0x41), BigInt(0x46)))) :: Nil))))))))))))))
+
+def Json_memberItems(x0: PTree): Either[Json_JErr, Json_JMembers] =
+  (x0 match {
+    case PTree.starCons(PTree.seq(l, PTree.nodeNT(i, mT)), rest) => (Json_memberKeyOf(mT).flatMap(((x5: (List[BigInt], Json_JValue)) => (x5 match {
+    case (k, v) => (Json_memberItems(rest).flatMap(((x8: Json_JMembers) => Right(Json_JMembers.cons(k, v, x8)))))
+  }))))
+    case PTree.starNil() => Right(Json_JMembers.nil())
+    case x9 => Left(Json_JErr.shape())
+  })
+
+def Json_memberKeyOf(x0: PTree): Either[Json_JErr, (List[BigInt], Json_JValue)] =
+  (x0 match {
+    case PTree.seq(PTree.nodeNT(i, sT), PTree.seq(l, PTree.nodeNT(i_1, vT))) => (Json_stringOf(sT).flatMap(((x6: List[BigInt]) => (Json_valueOf(vT).flatMap(((x7: Json_JValue) => Right((x6, x7))))))))
+    case x8 => Left(Json_JErr.shape())
+  })
+
+def Json_nameSepP: PExp =
+  Json_structTok(BigInt(0x3a))
+
+def Json_numberOf(x0: PTree): Either[Json_JErr, Json_JNumber] =
+  (x0 match {
+    case PTree.seq(PTree.choiceR(t), PTree.seq(PTree.nodeNT(i, intT), PTree.seq(fracOptT, expOptT))) => (Right(false).flatMap(((neg: Boolean) => { val x18: (List[BigInt]) => Either[Json_JErr, Json_JNumber] = ((fracPart: List[BigInt]) => { val x9: (Option[Json_JExp]) => Either[Json_JErr, Json_JNumber] = ((expPart: Option[Json_JExp]) => Right(Json_JNumber(neg, Json_intOf(intT), fracPart, expPart))); (expOptT match {
+    case PTree.choiceR(x10) => (Right(None).flatMap(((expPart: Option[Json_JExp]) => x9(expPart))))
+    case PTree.choiceL(PTree.nodeNT(x12, fT)) => (Json_expOf(fT).flatMap(((x14: Json_JExp) => (Right(Some(x14)).flatMap(((expPart: Option[Json_JExp]) => x9(expPart)))))))
+    case x16 => (Left(Json_JErr.shape()).flatMap(((expPart: Option[Json_JExp]) => x9(expPart))))
+  }) }); (fracOptT match {
+    case PTree.choiceR(x19) => (Right(Nil).flatMap(((fracPart: List[BigInt]) => x18(fracPart))))
+    case PTree.choiceL(PTree.nodeNT(x21, fT)) => (Json_fracOf(fT).flatMap(((fracPart: List[BigInt]) => x18(fracPart))))
+    case x24 => (Left(Json_JErr.shape()).flatMap(((fracPart: List[BigInt]) => x18(fracPart))))
+  }) })))
+    case PTree.seq(PTree.choiceL(t), PTree.seq(PTree.nodeNT(i, intT), PTree.seq(fracOptT, expOptT))) => (Right(true).flatMap(((neg: Boolean) => { val x43: (List[BigInt]) => Either[Json_JErr, Json_JNumber] = ((fracPart: List[BigInt]) => { val x34: (Option[Json_JExp]) => Either[Json_JErr, Json_JNumber] = ((expPart: Option[Json_JExp]) => Right(Json_JNumber(neg, Json_intOf(intT), fracPart, expPart))); (expOptT match {
+    case PTree.choiceR(x35) => (Right(None).flatMap(((expPart: Option[Json_JExp]) => x34(expPart))))
+    case PTree.choiceL(PTree.nodeNT(x37, fT)) => (Json_expOf(fT).flatMap(((x39: Json_JExp) => (Right(Some(x39)).flatMap(((expPart: Option[Json_JExp]) => x34(expPart)))))))
+    case x41 => (Left(Json_JErr.shape()).flatMap(((expPart: Option[Json_JExp]) => x34(expPart))))
+  }) }); (fracOptT match {
+    case PTree.choiceR(x44) => (Right(Nil).flatMap(((fracPart: List[BigInt]) => x43(fracPart))))
+    case PTree.choiceL(PTree.nodeNT(x46, fT)) => (Json_fracOf(fT).flatMap(((fracPart: List[BigInt]) => x43(fracPart))))
+    case x49 => (Left(Json_JErr.shape()).flatMap(((fracPart: List[BigInt]) => x43(fracPart))))
+  }) })))
+    case PTree.seq(minusOptT, PTree.seq(PTree.nodeNT(i, intT), PTree.seq(fracOptT, expOptT))) => (Left(Json_JErr.shape()).flatMap(((neg: Boolean) => { val x68: (List[BigInt]) => Either[Json_JErr, Json_JNumber] = ((fracPart: List[BigInt]) => { val x59: (Option[Json_JExp]) => Either[Json_JErr, Json_JNumber] = ((expPart: Option[Json_JExp]) => Right(Json_JNumber(neg, Json_intOf(intT), fracPart, expPart))); (expOptT match {
+    case PTree.choiceR(x60) => (Right(None).flatMap(((expPart: Option[Json_JExp]) => x59(expPart))))
+    case PTree.choiceL(PTree.nodeNT(x62, fT)) => (Json_expOf(fT).flatMap(((x64: Json_JExp) => (Right(Some(x64)).flatMap(((expPart: Option[Json_JExp]) => x59(expPart)))))))
+    case x66 => (Left(Json_JErr.shape()).flatMap(((expPart: Option[Json_JExp]) => x59(expPart))))
+  }) }); (fracOptT match {
+    case PTree.choiceR(x69) => (Right(Nil).flatMap(((fracPart: List[BigInt]) => x68(fracPart))))
+    case PTree.choiceL(PTree.nodeNT(x71, fT)) => (Json_fracOf(fT).flatMap(((fracPart: List[BigInt]) => x68(fracPart))))
+    case x74 => (Left(Json_JErr.shape()).flatMap(((fracPart: List[BigInt]) => x68(fracPart))))
+  }) })))
+    case x76 => Left(Json_JErr.shape())
+  })
+
+def Json_objectOf(x0: PTree): Either[Json_JErr, Json_JValue] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(PTree.choiceR(t), r)) => Right(Json_JValue.jobj(Json_JMembers.nil()))
+    case PTree.seq(l, PTree.seq(PTree.choiceL(PTree.seq(PTree.nodeNT(i, m0T), starT_1)), r)) => (Json_memberKeyOf(m0T).flatMap(((x9: (List[BigInt], Json_JValue)) => (x9 match {
+    case (k, v) => (Json_memberItems(starT_1).flatMap(((x12: Json_JMembers) => Right(Json_JValue.jobj(Json_JMembers.cons(k, v, x12))))))
+  }))))
+    case PTree.seq(l, PTree.seq(starT, r)) => Left(Json_JErr.shape())
+    case x16 => Left(Json_JErr.shape())
+  })
+
+def Json_parseJson(fuel: BigInt, s: String): Either[Json_JErr, Json_JValue] =
+  (pegRun(Json_jsonGrammar, fuel, PExp.nt(Json_JNT_jsonText), RT.stringToList(s)) match {
+    case None => Left(Json_JErr.fuelOut())
+    case Some(Outcome.fail()) => Left(Json_JErr.syntaxErr())
+    case Some(Outcome.ok(PTree.nodeNT(x4, PTree.seq(x5, PTree.seq(PTree.nodeNT(x6, vT), x8))), x9)) => Json_valueOf(vT)
+    case Some(Outcome.ok(x10, x11)) => Left(Json_JErr.shape())
+  })
+
+def Json_printExp(x0: Option[Json_JExp]): List[BigInt] =
+  (x0 match {
+    case None => Nil
+    case Some(e) => (((if (e.upper == true) then BigInt(0x45) else BigInt(0x65)) :: (e.sign match {
+    case Json_ExpSign.plus() => (BigInt(0x2b) :: Nil)
+    case Json_ExpSign.minus() => (BigInt(0x2d) :: Nil)
+    case Json_ExpSign.none() => Nil
+  })) ++ e.digits)
+  })
+
+def Json_printItems(x0: Json_JArray): List[BigInt] =
+  (x0 match {
+    case Json_JArray.nil() => Nil
+    case Json_JArray.cons(v, Json_JArray.nil()) => Json_printValue(v)
+    case Json_JArray.cons(v, rest) => (Json_printValue(v) ++ (BigInt(0x2c) :: Json_printItems(rest)))
+  })
+
+def Json_printJson(v: Json_JValue): String =
+  RT.listToString(Json_printValue(v))
+
+def Json_printMembers(x0: Json_JMembers): List[BigInt] =
+  (x0 match {
+    case Json_JMembers.nil() => Nil
+    case Json_JMembers.cons(k, v, Json_JMembers.nil()) => (Json_printString(k) ++ (BigInt(0x3a) :: Json_printValue(v)))
+    case Json_JMembers.cons(k, v, rest) => ((Json_printString(k) ++ (BigInt(0x3a) :: Json_printValue(v))) ++ (BigInt(0x2c) :: Json_printMembers(rest)))
+  })
+
+def Json_printNumber(n: Json_JNumber): List[BigInt] =
+  ((((if (n.neg == true) then (BigInt(0x2d) :: Nil) else Nil) ++ n.intPart) ++ (n.fracPart match {
+    case Nil => Nil
+    case ds => (BigInt(0x2e) :: ds)
+  })) ++ Json_printExp(n.expPart))
+
+def Json_printString(s: List[BigInt]): List[BigInt] =
+  ((BigInt(0x22) :: Json_escChars(s)) ++ (BigInt(0x22) :: Nil))
+
+def Json_printValue(x0: Json_JValue): List[BigInt] =
+  (x0 match {
+    case Json_JValue.jnull() => RT.stringToList("null")
+    case Json_JValue.jbool(true) => RT.stringToList("true")
+    case Json_JValue.jbool(false) => RT.stringToList("false")
+    case Json_JValue.jnum(n) => Json_printNumber(n)
+    case Json_JValue.jstr(s) => Json_printString(s)
+    case Json_JValue.jarr(vs) => ((BigInt(0x5b) :: Json_printItems(vs)) ++ (BigInt(0x5d) :: Nil))
+    case Json_JValue.jobj(ms) => ((BigInt(0x7b) :: Json_printMembers(ms)) ++ (BigInt(0x7d) :: Nil))
+  })
+
+def Json_stringOf(x0: PTree): Either[Json_JErr, List[BigInt]] =
+  (x0 match {
+    case PTree.seq(l, PTree.seq(starT, r)) => (Json_charUnits(starT).flatMap(((x4: List[BigInt]) => Json_combineUnits(x4))))
+    case x5 => Left(Json_JErr.shape())
+  })
+
+def Json_structTok(c: BigInt): PExp =
+  PExp.seq(PExp.nt(Json_JNT_ws), PExp.seq(PExp.chr(c), PExp.nt(Json_JNT_ws)))
+
+def Json_unescapedP: PExp =
+  PExp.alt(PExp.range(BigInt(0x20), BigInt(0x21)), PExp.alt(PExp.range(BigInt(0x23), BigInt(0x5b)), PExp.range(BigInt(0x5d), BigInt(1114111))))
+
+def Json_valueOf(x0: PTree): Either[Json_JErr, Json_JValue] =
+  (x0 match {
+    case PTree.choiceL(t) => Right(Json_JValue.jbool(false))
+    case PTree.choiceR(PTree.choiceL(t)) => Right(Json_JValue.jnull())
+    case PTree.choiceR(PTree.choiceR(PTree.choiceL(t))) => Right(Json_JValue.jbool(true))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, oT))))) => Json_objectOf(oT)
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, aT)))))) => Json_arrayOf(aT)
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceL(PTree.nodeNT(i, nT))))))) => (Json_numberOf(nT).flatMap(((x10: Json_JNumber) => Right(Json_JValue.jnum(x10)))))
+    case PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.choiceR(PTree.nodeNT(i, sT))))))) => (Json_stringOf(sT).flatMap(((x13: List[BigInt]) => Right(Json_JValue.jstr(x13)))))
+    case x14 => Left(Json_JErr.shape())
+  })
+
+def Json_valueSepP: PExp =
+  Json_structTok(BigInt(0x2c))
 
 def List_map[A, B](f: (A) => B, l: List[A]): List[B] =
   (l match {
