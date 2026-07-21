@@ -1,49 +1,71 @@
 # Shallot + Lens
 
-**完全な仕様・実装・機械検証された証明のセット、そして Lean 4 → Scala 3 抽出器。**
+**English** | [日本語](README-ja.md)
 
-- **Shallot** — Lean 4 で仕様・実装・証明を書いた第一階関数型ミニ言語。
-  形式意味論つき PEG パーサフレームワーク、健全かつ完全な型検査器、
-  型健全なインタプリタ、意味保存の定数畳み込み最適化器、
-  正しさ証明つきスタック VM コンパイラ、検証済み赤黒木マップ。
-- **Lens** — Lean 4 → Scala 3 抽出器（Lean メタプログラム、等式補題ルート）。
-  既知の先行事例なし。Shallot の実行可能部分を idiomatic な Scala 3 に抽出する。
+**A complete specification, implementation, and machine-checked proofs — plus a
+Lean 4 → Scala 3 extractor.**
+
+- **Shallot** — a first-order functional language whose specification,
+  implementation, and proofs all live in Lean 4: a PEG parser framework with
+  formal semantics, a sound **and** complete typechecker, a type-sound
+  interpreter, a semantics-preserving constant-folding optimizer, a stack-VM
+  compiler with a full correctness proof, and a verified red-black tree map.
+- **Lens** — a Lean 4 → Scala 3 extractor (a Lean metaprogram built on the
+  equation-lemma route; no prior art known). It extracts Shallot's executable
+  fragment into idiomatic Scala 3.
 
 ```mermaid
 flowchart LR
-    S["lean/Shallot<br/>仕様+実装+証明<br/>(sorry ゼロ)"] -->|"lake build<br/>= 全証明+公理監査"| S
-    S -->|"lake exe extract<br/>(Lens)"| G["scala/generated<br/>~1300行の Scala 3"]
-    R["scala/runtime<br/>手書きプレリュード"] --> G
+    S["lean/Shallot<br/>spec + impl + proofs<br/>(zero sorry)"] -->|"lake build<br/>= all proofs + axiom audit"| S
+    S -->|"lake exe extract<br/>(Lens)"| G["scala/generated<br/>~1300 lines of Scala 3"]
+    R["scala/runtime<br/>hand-written prelude"] --> G
     G --> C["shallot-cli<br/>run / eval / dump"]
-    S -.->|shallot-runner| D{"差分ハーネス<br/>60ケース 3方向一致"}
+    S -.->|shallot-runner| D{"differential harness<br/>60 cases, 3-way agreement"}
     C -.->|dump| D
 ```
 
-## 何が証明されているか
+## What is proven
 
-30本超のフラッグシップ定理、すべて `sorry` ゼロ・標準公理
-（`propext`/`Classical.choice`/`Quot.sound`、多くはそれ以下）のみ。
-`lean/Audit.lean` の `#guard_msgs in #print axioms` により**ビルド自体が公理監査**。
-完全な一覧は [docs/theorems.md](docs/theorems.md)。ハイライト：
+30+ flagship theorems, all with zero `sorry` and only the standard axioms
+(`propext` / `Classical.choice` / `Quot.sound` — many need fewer). The
+`#guard_msgs in #print axioms` blocks in `lean/Audit.lean` make **the build
+itself the axiom audit**. Full inventory: [docs/theorems.md](docs/theorems.md)
+(Japanese). Highlights:
 
-- **PEG**: Ford 流形式意味論に対するインタプリタの健全性・完全性・決定性
-  （決定性は構文木の一意性込み・公理ゼロ）
-- **型検査器**: 型付け関係に対して健全**かつ**完全
-- **型健全性**: well-typed なプログラムは stuck しない（`divByZero` のみ許容）
-- **コンパイラ正しさ**: `runProgram` が値 v で成功 ⇒ コンパイル済み VM も同じ v
-- **最適化器**: 定数畳み込みは型と評価結果を保存（プログラム全体レベル）
-- **赤黒木**: BST 順序・赤黒平衡（Okasaki、フル強度）・モデル refinement
-- **パーサ roundtrip**: 正準印字は検証済み PEG パーサで元の AST に復元される
-  （字句層・式層まで証明済み、プログラム層は最終組み立て中）
+- **PEG**: interpreter soundness, completeness, and determinism against a
+  Ford-style formal semantics (determinism includes parse-tree uniqueness and
+  uses no axioms at all)
+- **Typechecker**: sound **and** complete w.r.t. the typing relation
+- **Type soundness**: well-typed programs cannot get stuck (only `divByZero`
+  is possible; every stuck-class error is provably absent)
+- **Compiler correctness**: if `runProgram` succeeds with value *v*, the
+  compiled stack-VM computes the same *v*
+- **Optimizer**: constant folding preserves both typing and evaluation
+  results, at the whole-program level
+- **Red-black tree**: BST ordering, red-black balance (Okasaki, full
+  strength), and model refinement down to association lists
+- **Parser roundtrip**: canonically printed programs re-parse to exactly the
+  original AST through the verified PEG parser, composed into the closing
+  `pipeline_correct` theorem (print → parse → typecheck → evaluate → VM)
 
-具象構文のパーサは**検証済み汎用 PEG インタプリタに文法データを与えたもの**なので、
-PEG の健全性・完全性・決定性が Shallot パーサにそのまま適用される。
+The concrete-syntax parser is literally **the verified generic PEG interpreter
+applied to a grammar value**, so PEG soundness/completeness/determinism apply
+to the Shallot parser for free.
 
-## 動かす
+A fun by-product: the roundtrip proof **found a real grammar boundary
+condition** that 60 differential test cases had never hit (a bare-variable
+function body followed by a `(`-headed main expression is swallowed across the
+function boundary by PEG's prioritized `Call / Ident` choice). The prover
+demonstrated the counterexample against the actual parser, then proved the
+theorem under an explicit separation guard. Formal verification catching a
+specification hole, as advertised.
+
+## Running it
 
 ```sh
-scripts/install-lean.sh   # elan + Lean v4.32.0（初回のみ、~1.5GB）
-make verify               # 監査 → 全証明検査 → 抽出器golden → ドリフト → sbt test → 差分60ケース
+scripts/install-lean.sh   # elan + Lean v4.32.0 (first time only, ~1.5GB)
+make verify               # audit -> all proofs -> extractor goldens -> drift
+                          #   -> sbt test -> 60-case differential harness
 
 cd scala
 sbt "shallotCli/run run ../examples/fact.shl"      # => ok:3628800
@@ -51,27 +73,33 @@ sbt "shallotCli/run run ../examples/collatz.shl"   # => ok:111
 sbt "shallotCli/run eval \"1 + 2 * 3\""            # => ok:7
 ```
 
-CLI の言語処理は**全部 Lean からの抽出コード**や：パース＝形式検証済み PEG
-インタプリタ、型検査＝健全性・完全性証明済み、評価＝型健全性証明済み。
+Every language operation in the CLI runs through code **extracted from Lean**:
+parsing is the formally verified PEG interpreter, typechecking is proven
+sound and complete, evaluation is proven type-sound.
 
-## 規模
+## Scale
 
-Lean 約 10,300 行（うち証明 約 6,600 行 + 進行分）、Lens 抽出器 約 4,000 行、
-生成 Scala 約 1,300 行、差分コーパス 60 ケース、コミット 23+。
+~11,800 lines of Lean (~8,000 of them proofs), ~4,000 lines of extractor,
+~1,300 lines of generated Scala, a 60-case differential corpus.
 
-## TCB（信頼ベース）
+## Trusted computing base
 
-**信頼するもの**: Lean カーネル、Lens 抽出器、手書き Scala ランタイム
-（`shallot.rt`、約 550 行）、Scala 3 コンパイラと JVM。
-**検証済みのもの**: Lean レベルの全定理（上記）。
-橋渡しは差分ハーネス（`corpus/`）：ケーステーブル自体を Lean で定義して抽出し、
-Lean ネイティブ実行と抽出 Scala 実行を突き合わせる——レンダラや評価器の
-ドリフトは即座に差分として現れる。抽出器の対応範囲と制約は
-[docs/extractable-subset.md](docs/extractable-subset.md)。
+**Trusted**: the Lean kernel, the Lens extractor, the hand-written Scala
+runtime (`shallot.rt`, ~550 lines), the Scala 3 compiler and the JVM.
+**Verified**: every theorem above, at the Lean level.
+The bridge is the differential harness (`corpus/`): the case table itself is
+defined once in Lean and *extracted*, so the Lean-native run and the
+extracted-Scala run share one definition — any drift in the renderer or
+evaluators surfaces immediately as a diff. The extractor's supported subset
+and its restrictions are documented in
+[docs/extractable-subset.md](docs/extractable-subset.md) (Japanese).
 
-## 方針
+## Policies
 
-- `sorry`・`admit`・`native_decide`・追加公理はソースに存在しない
-  （`scripts/audit-source.sh` がソースレベルで、`Audit.lean` が意味レベルで拒否）
-- `scala/generated` はコミットされ、`scripts/check-drift.sh` が鮮度を機械保証
-- 外部依存ゼロ（Mathlib / Batteries 不使用）、ツールチェーンは v4.32.0 に固定
+- No `sorry`, `admit`, `native_decide`, or extra axioms anywhere in the tree
+  (`scripts/audit-source.sh` rejects them at the source level, `Audit.lean`
+  at the semantic level)
+- `scala/generated` is committed; `scripts/check-drift.sh` mechanically
+  guarantees it matches a fresh extraction
+- Zero external dependencies (no Mathlib / Batteries); toolchain pinned to
+  Lean v4.32.0
