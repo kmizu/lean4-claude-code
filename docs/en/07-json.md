@@ -1,6 +1,6 @@
 # 7. In practice — building a verified JSON parser
 
-**English** | [日本語](../guide/07-json.html) | [← Chapter 6](06-reading-guide.html) | [Table of contents](index.html)
+**English** | [日本語](../guide/07-json.html) | [← Chapter 6](06-reading-guide.html) | [Table of contents](index.html) | [Chapter 8 →](08-macro-peg.html)
 
 Chapter 6 closed by noting that plenty of unexplored topics that can be built
 on this foundation remain. This chapter is the first answer to that: on top of
@@ -111,4 +111,4 @@ completeness, determinism, and roundtrip all proven.
 
 ---
 
-[← Chapter 6: A reading guide](06-reading-guide.html) | [Table of contents](index.html)
+[← Chapter 6: A reading guide](06-reading-guide.html) | [Table of contents](index.html) | [Chapter 8: In practice — formalizing macro_peg →](08-macro-peg.html)

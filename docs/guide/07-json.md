@@ -1,6 +1,6 @@
 # 7. 応用編 — 検証済み JSON パーサを作る
 
-[English](../en/07-json.html) | **日本語** ｜ [← 6章](06-reading-guide.html) ｜ [目次](../index.html)
+[English](../en/07-json.html) | **日本語** ｜ [← 6章](06-reading-guide.html) ｜ [目次](../index.html) ｜ [8章 →](08-macro-peg.html)
 
 6 章の最後に「この土台の上でやれる未踏の題材はたくさん残っている」と書きました。
 この章はその最初の回答です：3 章の PEG フレームワークの上に、**実用フォーマットの
@@ -93,4 +93,4 @@ sbt "shallotCli/run json '{\"a\": [1, 2.5e3]}'"   # => ok:{"a":[1,2.5e3]}
 
 ---
 
-[← 6章 読みどころガイド](06-reading-guide.html) ｜ [目次](../index.html)
+[← 6章 読みどころガイド](06-reading-guide.html) ｜ [目次](../index.html) ｜ [8章 応用編: macro_peg →](08-macro-peg.html)

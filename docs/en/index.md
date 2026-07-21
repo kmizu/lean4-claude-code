@@ -19,6 +19,7 @@ generator or read Ford's paper, you are exactly who this was written for.
 5. [The Lens extractor — carrying proven Lean code into Scala 3](05-lens.html)
 6. [A reading guide — how to walk the source tree](06-reading-guide.html)
 7. [In practice — building a verified JSON parser](07-json.html)
+8. [In practice — formalizing macro_peg's call-by-name semantics](08-macro-peg.html)
 
 ## Reference material
 
