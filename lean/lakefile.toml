@@ -7,7 +7,7 @@ autoImplicit = false
 
 [[lean_lib]]
 name = "Shallot"
-roots = ["Shallot", "Audit"]
+roots = ["Shallot", "Audit", "Json"]
 
 [[lean_lib]]
 name = "Lens"
