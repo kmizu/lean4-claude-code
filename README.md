@@ -77,6 +77,17 @@ Every language operation in the CLI runs through code **extracted from Lean**:
 parsing is the formally verified PEG interpreter, typechecking is proven
 sound and complete, evaluation is proven type-sound.
 
+
+## Application: a verified JSON parser (RFC 8259)
+
+Built on the framework: `lean/Json/`. The RFC 8259 ABNF transcribed
+rule-for-rule into PEG data (T1-T3 inherited), a syntax-verbatim AST, a
+canonical printer, and the roundtrip theorem `parse_print_json` (strings
+need no assumption; numbers only digit-shape well-formedness).
+**Perfect y_/n_ score on JSONTestSuite**, and the extracted Scala parser
+produces identical verdicts on all 318 files.
+Try `sbt "shallotCli/run json '{\"a\": [1, 2.5e3]}'"`.
+
 ## Scale
 
 ~11,800 lines of Lean (~8,000 of them proofs), ~4,000 lines of extractor,

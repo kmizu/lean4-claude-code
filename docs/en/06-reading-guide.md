@@ -93,4 +93,4 @@ in a single file — `lean/Audit.lean`. Enjoy.
 
 ---
 
-[← Chapter 5: The Lens extractor — carrying proven Lean code into Scala 3](05-lens.html) | [Table of Contents](index.html)
+[← Chapter 5: The Lens extractor — carrying proven Lean code into Scala 3](05-lens.html) | [Table of Contents](index.html) | [Chapter 7: In practice — building a verified JSON parser →](07-json.html)

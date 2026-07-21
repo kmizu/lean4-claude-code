@@ -90,4 +90,4 @@ verify: audit lean lake-test check-drift scala diff
 
 ---
 
-[← 5章 Lens 抽出器](05-lens.html) ｜ [目次](../index.html)
+[← 5章 Lens 抽出器](05-lens.html) ｜ [目次](../index.html) ｜ [7章 応用編: JSON →](07-json.html)

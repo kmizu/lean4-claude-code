@@ -73,3 +73,15 @@
   `x ( 1 + 2 )` を関数呼び出しとして貪り、パーズが壊れる。**roundtrip 証明の過程で
   発見された本物の文法境界条件**（実パーサへの反例で検証済み。テストコーパスでは
   未検出やった——形式検証が仕様の穴を見つけた実例）。
+
+## 検証済み JSON パーサ（J シリーズ、RFC 8259）
+
+| 定理 | 内容 |
+|------|------|
+| T1-T3 の継承 | パーサ＝検証済み `pegRun` ＋ `jsonGrammar`（ABNF 1:1 対応表つき）なので健全性・木込み決定性・完全性が自動適用 |
+| J3 字句キット | `hexListVal_hex4`（\uXXXX の逆関数）、`combineUnits_map_toNat`（サロゲート合成）、`escapeCp_cases`（エスケープ4分岐 ⇔ 解析形の1:1対応） |
+| `derives_printJson` / `parse_print_json` (J-RT) | **正準印字の完全 roundtrip**: `wfValue v → parseJson (printJson v) = .ok v`（十分な燃料すべてで）。仮定は数値の桁形状のみ——**文字列は無条件** |
+
+経験的裏付け: nst/JSONTestSuite で y\_（必須受理）違反 0・n\_（必須拒否）違反 0、
+i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版は 318 ファイル
+全件で Lean 側と判定同一（不正 UTF-8 の扱い込み）。`make verify` に常設。

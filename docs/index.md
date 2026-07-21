@@ -17,6 +17,7 @@
 4. [Shallot 言語 — 型検査器・インタプリタ・コンパイラの証明スタック](guide/04-shallot.html)
 5. [Lens 抽出器 — 証明された Lean コードを Scala 3 にする](guide/05-lens.html)
 6. [読みどころガイド — ソースコードの歩き方](guide/06-reading-guide.html)
+7. [応用編 — 検証済み JSON パーサを作る](guide/07-json.html)
 
 ## リファレンス
 
