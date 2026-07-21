@@ -7,6 +7,7 @@ import Shallot.Opt.ConstFoldVerify
 import Shallot.Lang.TypeSound
 import Shallot.Vm.Correct
 import Shallot.Syntax.Roundtrip
+import Json.Roundtrip
 import Shallot.Peg.Props
 import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
@@ -149,3 +150,13 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.pipeline_correct' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.pipeline_correct
+
+/-! ## Verified JSON parser (J-series) — RFC 8259 roundtrip -/
+
+/-- info: 'Shallot.Json.derives_printJson' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Json.derives_printJson
+
+/-- info: 'Shallot.Json.parse_print_json' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Json.parse_print_json
