@@ -1,0 +1,8 @@
+{"case":"300-mpeg-copy-empty","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"301-mpeg-copy-aa","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"302-mpeg-copy-bb","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"303-mpeg-copy-abab","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"304-mpeg-copy-aabbaabb","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"305-mpeg-copy-reject-ab","phase":"eval","status":"ok","result":"fail"}
+{"case":"306-mpeg-copy-reject-aba","phase":"eval","status":"ok","result":"fail"}
+{"case":"307-mpeg-copy-reject-abba","phase":"eval","status":"ok","result":"fail"}

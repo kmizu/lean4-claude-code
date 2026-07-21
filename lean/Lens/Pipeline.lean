@@ -32,7 +32,9 @@ def defaultRoots : List Name :=
    -- M11: concrete syntax (verified-PEG parse → typecheck → eval)
    `Shallot.rtOk, `Shallot.runSource,
    -- J2: verified JSON parser (RFC 8259)
-   `Shallot.Json.parseJson, `Shallot.Json.printJson, `Shallot.Json.JErr.render]
+   `Shallot.Json.parseJson, `Shallot.Json.printJson, `Shallot.Json.JErr.render,
+   -- M-PEG: call-by-name macro-PEG interpreter + differential case table
+   `Shallot.MacroPeg.mpegRun, `Shallot.MacroPeg.renderMPeg, `Shallot.MacroPeg.mCases]
 
 unsafe def enableInitsUnsafe : IO Unit := enableInitializersExecution
 

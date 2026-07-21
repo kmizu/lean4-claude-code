@@ -13,6 +13,7 @@ import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
+import MacroPeg
 
 /-!
 # Axiom audit
@@ -160,3 +161,29 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.Json.parse_print_json' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.Json.parse_print_json
+
+/-! ## Macro PEG (M-PEG): call-by-name macro recursion — T0–T3 -/
+
+/-- info: 'Shallot.MacroPeg.mpegRun_mono' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.mpegRun_mono
+
+/-- info: 'Shallot.MacroPeg.mderives_suffix' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.mderives_suffix
+
+/-- info: 'Shallot.MacroPeg.mpegRun_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.mpegRun_sound
+
+/-- info: 'Shallot.MacroPeg.mderives_det' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.mderives_det
+
+/-- info: 'Shallot.MacroPeg.mpegRun_complete' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.mpegRun_complete
+
+/-- info: 'Shallot.MacroPeg.copy_language_ww' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.copy_language_ww

@@ -23,6 +23,17 @@ object Main:
       lines.mkString("", "\n", "\n")
     }
 
+  /** Same differential harness, Macro PEG side: evaluate the EXTRACTED
+    * `MacroPeg_mCases` table (see `MacroPeg/Corpus.lean`).
+    */
+  def macroDumpJsonl: String =
+    shallot.rt.Stack.run(256) {
+      val lines = shallot.gen.MacroPeg_mCases.map { case (id, result) =>
+        s"""{"case":"$id","phase":"eval","status":"ok","result":"$result"}"""
+      }
+      lines.mkString("", "\n", "\n")
+    }
+
   def main(args: Array[String]): Unit =
     args.toList match
       case "version" :: _ =>
@@ -52,9 +63,15 @@ object Main:
         System.err.println(s"shallot-cli: wrote $out")
       case "dump" :: Nil =>
         print(dumpJsonl)
+      case "macro-dump" :: out :: _ =>
+        Files.write(Paths.get(out), macroDumpJsonl.getBytes(StandardCharsets.UTF_8))
+        System.err.println(s"shallot-cli: wrote $out")
+      case "macro-dump" :: Nil =>
+        print(macroDumpJsonl)
       case _ =>
         println("""usage: shallot-cli <command>
-          |  run <file>    parse (verified PEG), typecheck, evaluate a .shl file
-          |  eval <src>    same, on a source string argument
-          |  dump [file]   differential-harness JSONL (extracted case table)
+          |  run <file>       parse (verified PEG), typecheck, evaluate a .shl file
+          |  eval <src>       same, on a source string argument
+          |  dump [file]      differential-harness JSONL (extracted case table)
+          |  macro-dump [file] differential-harness JSONL, Macro PEG side
           |  version""".stripMargin)

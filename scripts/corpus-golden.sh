@@ -9,3 +9,7 @@ mkdir -p corpus/golden
 ( cd lean && lake build shallot-runner >/dev/null && lake exe shallot-runner ../corpus/golden/all.jsonl )
 n=$(wc -l < corpus/golden/all.jsonl)
 echo "corpus-golden: regenerated corpus/golden/all.jsonl ($n cases) — review with git diff"
+
+( cd lean && lake build mpeg-runner >/dev/null && lake exe mpeg-runner ../corpus/golden/macro_peg.jsonl )
+nm=$(wc -l < corpus/golden/macro_peg.jsonl)
+echo "corpus-golden: regenerated corpus/golden/macro_peg.jsonl ($nm cases) — review with git diff"

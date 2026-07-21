@@ -35,3 +35,4 @@ import Shallot.Syntax.RoundtripExpr
 import Shallot.Syntax.Roundtrip
 import Shallot.Tests.Guards
 import Json
+import MacroPeg
