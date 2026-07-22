@@ -162,9 +162,9 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 #guard_msgs in
 #print axioms Shallot.Json.parse_print_json
 
-/-! ## Macro PEG (M-PEG): call-by-name macro recursion — T0–T3 -/
+/-! ## Macro PEG (M-PEG / M-PEG-2): call-by-name + call-by-value-par — T0–T3 -/
 
-/-- info: 'Shallot.MacroPeg.mpegRun_mono' depends on axioms: [propext] -/
+/-- info: 'Shallot.MacroPeg.mpegRun_mono' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.MacroPeg.mpegRun_mono
 
@@ -176,7 +176,7 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 #guard_msgs in
 #print axioms Shallot.MacroPeg.mpegRun_sound
 
-/-- info: 'Shallot.MacroPeg.mderives_det' does not depend on any axioms -/
+/-- info: 'Shallot.MacroPeg.mderives_det' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.MacroPeg.mderives_det
 

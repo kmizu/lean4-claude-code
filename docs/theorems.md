@@ -86,32 +86,48 @@
 i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版は 318 ファイル
 全件で Lean 側と判定同一（不正 UTF-8 の扱い込み）。`make verify` に常設。
 
-## Macro PEG（M-PEG）: kmizu/macro_peg の call-by-name 意味論
+## Macro PEG（M-PEG / M-PEG-2）: kmizu/macro_peg の call-by-name + call-by-value-par 意味論
 
 `MExp`（`.param k` = 現在の規則活性化の第 k 実引数、`.call i args` = 規則 i 呼び出し）
 と、それに対する新しい導出関係 `MDerives` / インタプリタ `mpegRun` を独立モジュール
 `MacroPeg/` として形式化。既存 `PExp`/`Derives`/`pegRun` の型としての拡張ではなく
 （Lean の inductive に部分型付き拡張はない）、同じ設計原則（Nat インデックス、
-整形式性仮定ゼロ、fuel 総称インタプリタ）を踏襲する並行実装。
+整形式性仮定ゼロ、fuel 総称インタプリタ）を踏襲する並行実装。M-PEG（`CallByName`
+のみ）の後続として、M-PEG-2 で `Strategy`（`.callByName` / `.callByValuePar`）
+パラメータを `MDerives`/`mpegRun` に通し、`CallByValuePar`（実引数を同一位置で
+独立評価するバックリファレンス風の戦略）を追加した——既存ファイルへの retrofit
+であり、既存の5定理・headline定理も含めすべて再検証済み。
 
 | 定理 | 内容 | 公理 |
 |------|------|------|
-| `mpegRun_mono` / `_le` (T0) | 燃料単調性 | propext |
+| `mpegRun_mono` / `_le` (T0) | 燃料単調性 | propext, Quot.sound |
 | `mderives_suffix` (P1) | 成功導出は接頭辞を消費する | propext |
 | `mpegRun_sound` (T1) | インタプリタの ok / fail 結果はすべて導出可能 | propext, Classical.choice, Quot.sound |
-| `mderives_det` (T2) | 導出結果は一意（構文木込み） | **公理ゼロ** |
+| `mderives_det` (T2) | 導出結果は一意（構文木込み） | propext, Quot.sound |
 | `mpegRun_complete` (T3) | すべての導出は有限燃料で計算される | propext, Quot.sound |
-| `copy_language_ww` | **headline**: コピー言語 `{ww \| w ∈ {a,b}*}`（非文脈自由の教科書的 witness）を `Copy(w) = "a" Copy(w "a") / "b" Copy(w "b") / w` が `{a,b}*` 上の**すべての** `u` について認識することを証明（Scala テストスイートは有限個の witness しか確認できないが、証明は全称量化） | propext, Classical.choice, Quot.sound |
+| `copy_language_ww` | **headline**（`CallByName`）: コピー言語 `{ww \| w ∈ {a,b}*}`（非文脈自由の教科書的 witness）を `Copy(w) = "a" Copy(w "a") / "b" Copy(w "b") / w` が `{a,b}*` 上の**すべての** `u` について認識することを証明（Scala テストスイートは有限個の witness しか確認できないが、証明は全称量化） | propext, Classical.choice, Quot.sound |
 
-設計判断（`MacroPeg/Syntax.lean` のヘッダに詳細）:
+設計判断（`MacroPeg/Syntax.lean`/`Semantics.lean` のヘッダに詳細）:
 - **de Bruijn 化で `extract()` が不要になる**: 参照実装（Scala `Evaluator`）は
   パラメータを名前で表現し、`extract()` という手製の変数捕獲回避関数を必要とする。
   Lean 側はパラメータを「現在の規則活性化の第 k 引数」という 1 段の de Bruijn
   インデックスで表現し、単純な構造的置換 `MExp.subst` だけで capture-free になる
-- **スコープ**: `CallByName`（デフォルト・全 headline テストが依拠）のみを形式化。
-  `CallByValueSeq`/`CallByValuePar` と、別ユーティリティ `MacroExpander` 経由でのみ
-  動作する高階関数（ラムダ・カリー化）レイヤーは対象外——前者は将来のマイルストーン、
-  後者は非停止性リスクのある構文的インライン化パスでネイティブ機能ではない
+- **スコープ**: `CallByName`＋`CallByValuePar` を形式化。`CallByValueSeq` と、
+  別ユーティリティ `MacroExpander` 経由でのみ動作する高階関数（ラムダ・カリー化）
+  レイヤーは対象外——前者は将来のマイルストーン、後者は非停止性リスクのある
+  構文的インライン化パスでネイティブ機能ではない
+- **`callParArgFail` は証明が見つけた本物の設計バグだった**:
+  `CallByValuePar` の「実引数のどれかが失敗したら呼び出し全体が失敗する」という
+  規則の最初のドラフトは、`badArg ∈ args`（リストのどこかに失敗する引数がある）
+  としか要求しておらず、`callParArgFail` より前の引数の成否を一切制約していなかった。
+  完全性（T3）を証明しようとしたエージェントが、この規則が**参照実装の左から右への
+  短絡評価と矛盾する**ことを機械的に発見した——`badArg` より前に非停止な引数が
+  あると、導出は存在するのに `mpegRun` はどの燃料でも決してその `.fail` を実現
+  できない（`none` を返し続ける）反例を構築し、`sorry` の代わりに証明可能な
+  disproof を残して報告した。修正: `callParArgFail` に `args = pre ++ badArg :: post`
+  という明示的な分割と `hpre : DerivesArgsPar g s input pre preVals`（`badArg` より
+  前がすべて成功している証拠）を追加。これで `evalArgsPar` の左から右への
+  短絡評価と正確に対応するようになり、T3 は sorry ゼロで通った
 - **`copy_gen` の一般化**: 帰納法は `u` に対して行うが、`Copy` の再帰呼び出しの実引数
   `w "a"` は call-by-name のため評価されず構文木のまま渡る（`.lit` に平坦化されない）。
   よって「アキュムレータは `.lit w` である」という形の帰納法は成立せず、`ExactMatch`

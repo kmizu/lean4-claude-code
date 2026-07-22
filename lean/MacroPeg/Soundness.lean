@@ -1,51 +1,154 @@
 import MacroPeg.Semantics
 import MacroPeg.Interp
+import MacroPeg.Props
 
 /-!
-# T1 — interpreter soundness (Macro PEG)
+# T1 — interpreter soundness (Macro PEG, call-by-name + call-by-value-par)
 
-`mpegRun g f e x = some o → MDerives g e x o`: any outcome the fuel
-interpreter actually returns — success or failure alike — is derivable in
-the formal semantics (`none` means "out of fuel" and is excluded by the
-hypothesis). Verbatim mirror of `Shallot.Peg.Soundness.pegRun_sound`, with
-`.nt` becoming `.call` (an extra arity `if`, see `MacroPeg/Fuel.lean`'s
-working idiom) and two new leaf cases (`.param`, `.dbg`) with no `Derives`
-analogue.
+`mpegRun g s f e x = some o → MDerives g s e x o`. Mirrors
+`Shallot.Peg.Soundness.pegRun_sound`/M-PEG's own prior `mpegRun_sound` for
+the shared cases, retrofitted with `s` threaded through and a new
+`.callByValuePar` branch.
 
-Proof-engineering notes (same discipline as T0 in `Fuel.lean`):
-- never `simp only [mpegRun]` on anything holding successor-fuel calls; use
-  `rw [mpegRun.eq_def]` then `dsimp only` to unfold exactly one layer
-- `cases hr : <expr>` substitutes occurrences in the goal, not in
-  hypotheses — always follow with `rw [hr] at h`
-- `split at h` alone does not sync the goal; for the `.call` arity `if`,
-  `by_cases hpos : r.arity ≠ args.length` + `simp only [if_pos/if_neg]` is
-  what works (mirrors `Fuel.lean`)
-- the interpreter's inner-star `some .fail` branch is semantically
-  unreachable: there the IH yields `MDerives g (.star e) rest .fail`, which
-  `mStarNeverFails` refutes
+Just like `mpegRun_mono`/`evalArgsPar_mono_of_mpegRun_mono` in `Fuel.lean`,
+the `.callByValuePar` case does NOT need a genuinely mutual induction: a
+companion fact `evalArgsPar_sound_of_mpegRun_sound` — "if `mpegRun`-sound
+holds at fuel level `f`, then whatever `evalArgsPar` returns at that same
+level `f` is derivable via `DerivesArgsPar`" — is provable by plain list
+induction on the argument list, taking mpegRun-sound-at-`f` as a parameter.
+That parameter is exactly `ih` inside `mpegRun_sound`'s own
+`induction f generalizing e x o with | succ f ih => ...`, since unfolding
+`mpegRun` at `f+1` uses `evalArgsPar` at the INNER fuel `f`, and `ih` is
+soundness at that same `f`.
+
+Proof-engineering notes (same discipline as `Fuel.lean`): `rw
+[mpegRun.eq_def]`/`rw [evalArgsPar.eq_def]` + `dsimp only` to unfold one
+layer; `by_cases hbeq : (r.arity == args.length) = true` +
+`simp only [if_pos/if_neg]` for the arity check (Bool, not Prop `≠` —
+matches `Fuel.lean`'s working idiom); the interpreter's inner-star
+`some .fail` branch is refuted by `mStarNeverFails`.
 -/
 
 namespace Shallot.MacroPeg
 
 /-- A star never fails: the only `MDerives` rules concluding at a `.star`
 expression are `starNil` and `starCons`, and both produce `.ok`. -/
-theorem mStarNeverFails {g : MGrammar} {e : MExp} {input : List Char} {o : MOutcome}
-    (h : MDerives g (.star e) input o) : o ≠ .fail := by
+theorem mStarNeverFails {g : MGrammar} {s : Strategy} {e : MExp} {input : List Char} {o : MOutcome}
+    (h : MDerives g s (.star e) input o) : o ≠ .fail := by
   intro hf
   subst hf
   cases h
 
-/-- Local Bool inversion helper: `¬(b = true)` gives `b = false` (used for
-the `if` side conditions of `chr`/`range`; kept local so the proof does not
-lean on stdlib lemma names). -/
+/-- Local Bool inversion helper: `¬(b = true)` gives `b = false`. -/
 theorem eq_false_of_not_eq_true {b : Bool} (h : ¬(b = true)) : b = false := by
   cases b with
   | false => rfl
   | true => exact absurd rfl h
 
+theorem lenChars_append (p rest : List Char) :
+    lenChars (p ++ rest) = lenChars p + lenChars rest := by
+  induction p with
+  | nil => simp [lenChars]
+  | cons c cs ih => simp only [List.cons_append, lenChars, ih]; omega
+
+/-- `prefixBeforeSuffix` computes exactly the prefix it's supposed to:
+given ANY split `p ++ rest`, stripping `rest` back off returns `p`. Needed
+to identify `evalArgsPar`'s computed `.lit (prefixBeforeSuffix input rest)`
+with the `.lit p` that `DerivesArgsPar.cons` expects, where `p` comes from
+`mderives_suffix`-style reasoning (`hd1`'s own P1 fact) rather than from
+`prefixBeforeSuffix` itself. -/
+theorem prefixBeforeSuffix_correct (p rest : List Char) :
+    prefixBeforeSuffix (p ++ rest) rest = p := by
+  induction p with
+  | nil =>
+    rw [prefixBeforeSuffix.eq_def]
+    simp only [List.nil_append, beq_iff_eq]
+    split
+    · rfl
+    · rename_i hcond; exact absurd trivial hcond
+  | cons c cs ih =>
+    rw [prefixBeforeSuffix.eq_def]
+    simp only [List.cons_append, beq_iff_eq]
+    split
+    · rename_i hcond
+      exfalso
+      simp only [lenChars, lenChars_append] at hcond
+      omega
+    · rw [ih]
+
+/-- If `mpegRun` is sound at fuel level `f` (the exact fact
+`mpegRun_sound`'s own induction hands you as `ih`), then whatever
+`evalArgsPar` returns at that same level is derivable via `DerivesArgsPar`
+(success case) or witnesses a failing argument (failure case). Plain
+structural induction on the argument list. -/
+theorem evalArgsPar_sound_of_mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat}
+    (hM : ∀ {e : MExp} {x : List Char} {o : MOutcome},
+      mpegRun g s f e x = some o → MDerives g s e x o) :
+    ∀ {input : List Char} {args : List MExp} {r : Option (List MExp)},
+      evalArgsPar g s f input args = some r →
+        (∀ vals, r = some vals → DerivesArgsPar g s input args vals) ∧
+        (r = none → ∃ pre badArg post preVals, args = pre ++ badArg :: post ∧
+          DerivesArgsPar g s input pre preVals ∧ MDerives g s badArg input .fail) := by
+  intro input args
+  induction args with
+  | nil =>
+    intro r h
+    simp only [evalArgsPar] at h
+    cases h
+    refine ⟨?_, ?_⟩
+    · intro vals hv; cases hv; exact DerivesArgsPar.nil input
+    · intro hn; cases hn
+  | cons a as ih =>
+    intro r h
+    rw [evalArgsPar.eq_def] at h
+    dsimp only at h
+    cases h1 : mpegRun g s f a input with
+    | none => rw [h1] at h; exact absurd h (by simp)
+    | some o1 =>
+      rw [h1] at h
+      have hd1 := hM h1
+      cases o1 with
+      | fail =>
+        dsimp only at h
+        cases h
+        refine ⟨?_, ?_⟩
+        · intro vals hv; cases hv
+        · intro _
+          exact ⟨[], a, as, [], rfl, DerivesArgsPar.nil input, hd1⟩
+      | ok t rest =>
+        dsimp only at h
+        cases h2 : evalArgsPar g s f input as with
+        | none => rw [h2] at h; exact absurd h (by simp)
+        | some o2 =>
+          rw [h2] at h
+          obtain ⟨ihSome, ihNone⟩ := ih h2
+          cases o2 with
+          | none =>
+            dsimp only at h
+            cases h
+            refine ⟨?_, ?_⟩
+            · intro vals hv; cases hv
+            · intro _
+              obtain ⟨pre', badArg, post, preVals', heq, hpre', hbad⟩ := ihNone rfl
+              obtain ⟨p, hp⟩ := mderives_suffix hd1 t rest rfl
+              refine ⟨a :: pre', badArg, post, .lit p :: preVals', by simp [heq], ?_, hbad⟩
+              exact DerivesArgsPar.cons a pre' input p rest t preVals' hd1 hp hpre'
+          | some vs =>
+            dsimp only at h
+            cases h
+            refine ⟨?_, ?_⟩
+            · intro vals hv
+              cases hv
+              obtain ⟨p, hp⟩ := mderives_suffix hd1 t rest rfl
+              have hpeq : prefixBeforeSuffix input rest = p := by
+                rw [hp]; exact prefixBeforeSuffix_correct p rest
+              rw [hpeq]
+              exact DerivesArgsPar.cons a as input p rest t vs hd1 hp (ihSome vs rfl)
+            · intro hcon; exact absurd hcon (by simp)
+
 /-- T1 — soundness: whatever the interpreter returns is derivable. -/
-theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : MOutcome}
-    (h : mpegRun g f e x = some o) : MDerives g e x o := by
+theorem mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : List Char} {o : MOutcome}
+    (h : mpegRun g s f e x = some o) : MDerives g s e x o := by
   induction f generalizing e x o with
   | zero => simp [mpegRun] at h
   | succ f ih =>
@@ -96,19 +199,19 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
         · rename_i hb
           cases h
           exact MDerives.rangeFail lo hi d rest (eq_false_of_not_eq_true hb)
-    | lit s =>
+    | lit str =>
       dsimp only at h
-      cases hs : stripPrefix? s x with
+      cases hs : stripPrefix? str x with
       | some rest =>
         rw [hs] at h
         dsimp only at h
         cases h
-        exact MDerives.litOk s x rest hs
+        exact MDerives.litOk str x rest hs
       | none =>
         rw [hs] at h
         dsimp only at h
         cases h
-        exact MDerives.litFail s x hs
+        exact MDerives.litFail str x hs
     | param k =>
       dsimp only at h
       cases h
@@ -127,19 +230,52 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
         by_cases hbeq : (r.arity == args.length) = true
         · simp only [if_pos hbeq] at h
           have ha : r.arity = args.length := by simpa using hbeq
-          cases h1 : mpegRun g f (MExp.subst args r.body) x with
-          | none => rw [h1] at h; exact absurd h (by simp)
-          | some o1 =>
-            rw [h1] at h
-            cases o1 with
-            | fail =>
-              dsimp only at h
-              cases h
-              exact MDerives.callFail i args r x hr ha (ih h1)
-            | ok t rest =>
-              dsimp only at h
-              cases h
-              exact MDerives.callOk i args r x rest t hr ha (ih h1)
+          cases s with
+          | callByName =>
+            dsimp only at h
+            cases h1 : mpegRun g .callByName f (MExp.subst args r.body) x with
+            | none => rw [h1] at h; exact absurd h (by simp)
+            | some o1 =>
+              rw [h1] at h
+              cases o1 with
+              | fail =>
+                dsimp only at h
+                cases h
+                exact MDerives.callNameFail i args r x rfl hr ha (ih h1)
+              | ok t rest =>
+                dsimp only at h
+                cases h
+                exact MDerives.callNameOk i args r x rest t rfl hr ha (ih h1)
+          | callByValuePar =>
+            dsimp only at h
+            cases h1 : evalArgsPar g .callByValuePar f x args with
+            | none => rw [h1] at h; exact absurd h (by simp)
+            | some o1 =>
+              rw [h1] at h
+              obtain ⟨hSome, hNone⟩ := evalArgsPar_sound_of_mpegRun_sound (@ih) h1
+              cases o1 with
+              | none =>
+                dsimp only at h
+                cases h
+                obtain ⟨pre, badArg, post, preVals, heq, hpre, hbad⟩ := hNone rfl
+                rw [heq]
+                exact MDerives.callParArgFail i pre badArg post r x preVals rfl hr (heq ▸ ha) hpre hbad
+              | some vals =>
+                dsimp only at h
+                have hargs := hSome vals rfl
+                cases h2 : mpegRun g .callByValuePar f (MExp.subst vals r.body) x with
+                | none => rw [h2] at h; exact absurd h (by simp)
+                | some o2 =>
+                  rw [h2] at h
+                  cases o2 with
+                  | fail =>
+                    dsimp only at h
+                    cases h
+                    exact MDerives.callParFail i args r x vals rfl hr ha hargs (ih h2)
+                  | ok t rest =>
+                    dsimp only at h
+                    cases h
+                    exact MDerives.callParOk i args r x rest vals t rfl hr ha hargs (ih h2)
         · simp only [if_neg hbeq] at h
           cases h
           have hne : r.arity ≠ args.length := by
@@ -148,7 +284,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
           exact MDerives.callArity i args r x hr hne
     | seq e₁ e₂ =>
       dsimp only at h
-      cases h1 : mpegRun g f e₁ x with
+      cases h1 : mpegRun g s f e₁ x with
       | none => rw [h1] at h; exact absurd h (by simp)
       | some o1 =>
         rw [h1] at h
@@ -159,7 +295,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
           exact MDerives.seqFail₁ e₁ e₂ x (ih h1)
         | ok t₁ rest₁ =>
           dsimp only at h
-          cases h2 : mpegRun g f e₂ rest₁ with
+          cases h2 : mpegRun g s f e₂ rest₁ with
           | none => rw [h2] at h; exact absurd h (by simp)
           | some o2 =>
             rw [h2] at h
@@ -174,7 +310,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
               exact MDerives.seqOk e₁ e₂ x rest₁ rest₂ t₁ t₂ (ih h1) (ih h2)
     | alt e₁ e₂ =>
       dsimp only at h
-      cases h1 : mpegRun g f e₁ x with
+      cases h1 : mpegRun g s f e₁ x with
       | none => rw [h1] at h; exact absurd h (by simp)
       | some o1 =>
         rw [h1] at h
@@ -185,7 +321,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
           exact MDerives.altL e₁ e₂ x rest t (ih h1)
         | fail =>
           dsimp only at h
-          cases h2 : mpegRun g f e₂ x with
+          cases h2 : mpegRun g s f e₂ x with
           | none => rw [h2] at h; exact absurd h (by simp)
           | some o2 =>
             rw [h2] at h
@@ -200,7 +336,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
               exact MDerives.altFail e₁ e₂ x (ih h1) (ih h2)
     | star e =>
       dsimp only at h
-      cases h1 : mpegRun g f e x with
+      cases h1 : mpegRun g s f e x with
       | none => rw [h1] at h; exact absurd h (by simp)
       | some o1 =>
         rw [h1] at h
@@ -211,7 +347,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
           exact MDerives.starNil e x (ih h1)
         | ok t rest =>
           dsimp only at h
-          cases h2 : mpegRun g f (.star e) rest with
+          cases h2 : mpegRun g s f (.star e) rest with
           | none => rw [h2] at h; exact absurd h (by simp)
           | some o2 =>
             rw [h2] at h
@@ -225,7 +361,7 @@ theorem mpegRun_sound {g : MGrammar} {f : Nat} {e : MExp} {x : List Char} {o : M
               exact MDerives.starCons e x rest rest' t ts (ih h1) (ih h2)
     | notP e =>
       dsimp only at h
-      cases h1 : mpegRun g f e x with
+      cases h1 : mpegRun g s f e x with
       | none => rw [h1] at h; exact absurd h (by simp)
       | some o1 =>
         rw [h1] at h

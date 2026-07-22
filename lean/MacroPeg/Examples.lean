@@ -1,4 +1,6 @@
 import MacroPeg.Semantics
+import MacroPeg.Interp
+import MacroPeg.Render
 
 /-!
 # Headline example: the copy language {ww | w ∈ {a,b}*}
@@ -106,8 +108,8 @@ theorem copyRule_lookup : ruleAtM copyGrammar.rules copyIdx = some { arity := 1,
 See the module docstring for why this abstraction (rather than "the
 accumulator is `.lit w`") is what the induction needs. -/
 structure ExactMatch (wexp : MExp) (w : List Char) : Prop where
-  succ : ∀ rest, ∃ t, MDerives copyGrammar wexp (w ++ rest) (.ok t rest)
-  fail : ∀ z, (∀ p, z ≠ w ++ p) → MDerives copyGrammar wexp z .fail
+  succ : ∀ rest, ∃ t, MDerives copyGrammar .callByName wexp (w ++ rest) (.ok t rest)
+  fail : ∀ z, (∀ p, z ≠ w ++ p) → MDerives copyGrammar .callByName wexp z .fail
 
 theorem exactMatch_lit (w : List Char) : ExactMatch (.lit w) w where
   succ := fun rest => ⟨.leaf w, MDerives.litOk w (w ++ rest) rest (mStripPrefixAppend w rest)⟩
@@ -153,7 +155,7 @@ and each grow alternative's tail is a `Copy` CALL on a strictly-longer
 accumulator applied to an input of length `|w| - 1 < |w ++ [c]|`. -/
 theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
     ∀ z : List Char, z.length < w.length →
-      MDerives copyGrammar (.call copyIdx [wexp]) z .fail := by
+      MDerives copyGrammar .callByName (.call copyIdx [wexp]) z .fail := by
   intro z
   induction z generalizing wexp w with
   | nil =>
@@ -164,15 +166,15 @@ theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
       simp only [List.length_append, List.length_nil] at hc
       have hwpos : 0 < w.length := hlen
       omega
-    have hC : MDerives copyGrammar wexp [] .fail := hm.fail [] hne
-    have hA : MDerives copyGrammar (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) [] .fail :=
+    have hC : MDerives copyGrammar .callByName wexp [] .fail := hm.fail [] hne
+    have hA : MDerives copyGrammar .callByName (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) [] .fail :=
       MDerives.seqFail₁ (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')]) [] (MDerives.chrEmpty 'a')
-    have hB : MDerives copyGrammar (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) [] .fail :=
+    have hB : MDerives copyGrammar .callByName (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) [] .fail :=
       MDerives.seqFail₁ (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')]) [] (MDerives.chrEmpty 'b')
-    have hbody : MDerives copyGrammar (MExp.subst [wexp] copyBody) [] .fail :=
+    have hbody : MDerives copyGrammar .callByName (MExp.subst [wexp] copyBody) [] .fail :=
       MDerives.altFail _ _ [] hA (MDerives.altFail _ _ [] hB hC)
-    exact MDerives.callFail copyIdx [wexp] { arity := 1, body := copyBody } []
-      copyRule_lookup rfl hbody
+    exact MDerives.callNameFail copyIdx [wexp] { arity := 1, body := copyBody } []
+      rfl copyRule_lookup rfl hbody
   | cons d z' ih =>
     intro hlen
     have hne : ∀ p, (d :: z') ≠ w ++ p := by
@@ -181,8 +183,8 @@ theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
       simp only [List.length_append, List.length_cons] at hc
       simp only [List.length_cons] at hlen
       omega
-    have hC : MDerives copyGrammar wexp (d :: z') .fail := hm.fail (d :: z') hne
-    have hA : MDerives copyGrammar (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) (d :: z') .fail := by
+    have hC : MDerives copyGrammar .callByName wexp (d :: z') .fail := hm.fail (d :: z') hne
+    have hA : MDerives copyGrammar .callByName (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) (d :: z') .fail := by
       by_cases hda : d = 'a'
       · subst hda
         have hlz : z'.length < (w ++ ['a']).length := by
@@ -194,7 +196,7 @@ theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
           (.leaf ['a']) (MDerives.chrOk 'a' 'a' z' (mBeqCharRefl 'a')) hcall
       · exact MDerives.seqFail₁ (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')]) (d :: z')
           (MDerives.chrFail 'a' d z' (mBeqCharFalseOfNe (Ne.symm hda)))
-    have hB : MDerives copyGrammar (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) (d :: z') .fail := by
+    have hB : MDerives copyGrammar .callByName (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) (d :: z') .fail := by
       by_cases hdb : d = 'b'
       · subst hdb
         have hlz : z'.length < (w ++ ['b']).length := by
@@ -206,10 +208,10 @@ theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
           (.leaf ['b']) (MDerives.chrOk 'b' 'b' z' (mBeqCharRefl 'b')) hcall
       · exact MDerives.seqFail₁ (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')]) (d :: z')
           (MDerives.chrFail 'b' d z' (mBeqCharFalseOfNe (Ne.symm hdb)))
-    have hbody : MDerives copyGrammar (MExp.subst [wexp] copyBody) (d :: z') .fail :=
+    have hbody : MDerives copyGrammar .callByName (MExp.subst [wexp] copyBody) (d :: z') .fail :=
       MDerives.altFail _ _ (d :: z') hA (MDerives.altFail _ _ (d :: z') hB hC)
-    exact MDerives.callFail copyIdx [wexp] { arity := 1, body := copyBody } (d :: z')
-      copyRule_lookup rfl hbody
+    exact MDerives.callNameFail copyIdx [wexp] { arity := 1, body := copyBody } (d :: z')
+      rfl copyRule_lookup rfl hbody
 
 /-! ## The headline theorem -/
 
@@ -224,16 +226,16 @@ accumulator); the step case consumes one character via `chrOk` and applies
 the IH with `w ++ [c]` / `exactMatch_step hm c`. -/
 theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
     ∀ u : List Char, (∀ c ∈ u, c = 'a' ∨ c = 'b') →
-      ∃ t, MDerives copyGrammar (.call copyIdx [wexp]) (u ++ w ++ u) (.ok t []) := by
+      ∃ t, MDerives copyGrammar .callByName (.call copyIdx [wexp]) (u ++ w ++ u) (.ok t []) := by
   intro u
   induction u generalizing wexp w with
   | nil =>
     intro _hu
     simp only [List.nil_append, List.append_nil]
-    have hgrowA : MDerives copyGrammar (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) w .fail := by
+    have hgrowA : MDerives copyGrammar .callByName (.seq (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')])) w .fail := by
       by_cases hstarts : ∃ p, w = 'a' :: p
       · obtain ⟨p, hp⟩ := hstarts
-        have h1 : MDerives copyGrammar (.chr 'a') w (.ok (.leaf ['a']) p) := by
+        have h1 : MDerives copyGrammar .callByName (.chr 'a') w (.ok (.leaf ['a']) p) := by
           rw [hp]; exact MDerives.chrOk 'a' 'a' p (mBeqCharRefl 'a')
         have hlen : p.length < (w ++ ['a']).length := by
           have hw : w.length = p.length + 1 := by rw [hp]; simp
@@ -242,17 +244,17 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
         have h2 := copy_fail_short (exactMatch_step hm 'a') p hlen
         exact MDerives.seqFail₂ (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')]) w p (.leaf ['a']) h1 h2
       · have hstarts' : ∀ p, w ≠ 'a' :: p := fun p hp => hstarts ⟨p, hp⟩
-        have hfail : MDerives copyGrammar (.chr 'a') w .fail := by
+        have hfail : MDerives copyGrammar .callByName (.chr 'a') w .fail := by
           cases w with
           | nil => exact MDerives.chrEmpty 'a'
           | cons d ds =>
             have hda : d ≠ 'a' := fun hda => hstarts' ds (by rw [hda])
             exact MDerives.chrFail 'a' d ds (mBeqCharFalseOfNe (Ne.symm hda))
         exact MDerives.seqFail₁ (.chr 'a') (.call copyIdx [.seq wexp (.chr 'a')]) w hfail
-    have hgrowB : MDerives copyGrammar (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) w .fail := by
+    have hgrowB : MDerives copyGrammar .callByName (.seq (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')])) w .fail := by
       by_cases hstarts : ∃ p, w = 'b' :: p
       · obtain ⟨p, hp⟩ := hstarts
-        have h1 : MDerives copyGrammar (.chr 'b') w (.ok (.leaf ['b']) p) := by
+        have h1 : MDerives copyGrammar .callByName (.chr 'b') w (.ok (.leaf ['b']) p) := by
           rw [hp]; exact MDerives.chrOk 'b' 'b' p (mBeqCharRefl 'b')
         have hlen : p.length < (w ++ ['b']).length := by
           have hw : w.length = p.length + 1 := by rw [hp]; simp
@@ -261,7 +263,7 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
         have h2 := copy_fail_short (exactMatch_step hm 'b') p hlen
         exact MDerives.seqFail₂ (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')]) w p (.leaf ['b']) h1 h2
       · have hstarts' : ∀ p, w ≠ 'b' :: p := fun p hp => hstarts ⟨p, hp⟩
-        have hfail : MDerives copyGrammar (.chr 'b') w .fail := by
+        have hfail : MDerives copyGrammar .callByName (.chr 'b') w .fail := by
           cases w with
           | nil => exact MDerives.chrEmpty 'b'
           | cons d ds =>
@@ -270,11 +272,11 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
         exact MDerives.seqFail₁ (.chr 'b') (.call copyIdx [.seq wexp (.chr 'b')]) w hfail
     obtain ⟨t3, h3⟩ := hm.succ []
     simp only [List.append_nil] at h3
-    have hbody : MDerives copyGrammar (MExp.subst [wexp] copyBody) w (.ok (.choiceR (.choiceR t3)) []) :=
+    have hbody : MDerives copyGrammar .callByName (MExp.subst [wexp] copyBody) w (.ok (.choiceR (.choiceR t3)) []) :=
       MDerives.altR _ _ w [] _ hgrowA
         (MDerives.altR _ _ w [] _ hgrowB h3)
-    exact ⟨.nodeCall copyIdx (.choiceR (.choiceR t3)), MDerives.callOk copyIdx [wexp]
-      { arity := 1, body := copyBody } w [] _ copyRule_lookup rfl hbody⟩
+    exact ⟨.nodeCall copyIdx (.choiceR (.choiceR t3)), MDerives.callNameOk copyIdx [wexp]
+      { arity := 1, body := copyBody } w [] _ rfl copyRule_lookup rfl hbody⟩
   | cons c u' ih =>
     intro hu
     have hc : c = 'a' ∨ c = 'b' := hu c (List.mem_cons.mpr (Or.inl rfl))
@@ -286,7 +288,7 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
       rw [heq] at hstep
       obtain ⟨t, ht⟩ := hstep
       -- ht : the recursive call matches the remaining input `u' ++ w ++ ('a' :: u')`
-      have hbody : MDerives copyGrammar (MExp.subst [wexp] copyBody)
+      have hbody : MDerives copyGrammar .callByName (MExp.subst [wexp] copyBody)
           (('a' :: u') ++ w ++ ('a' :: u'))
           (.ok (.choiceL (.seq (.leaf ['a']) t)) []) := by
         apply MDerives.altL
@@ -294,14 +296,14 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
           (('a' :: u') ++ w ++ ('a' :: u')) (u' ++ w ++ ('a' :: u')) [] (.leaf ['a']) t
           (MDerives.chrOk 'a' 'a' (u' ++ w ++ ('a' :: u')) (mBeqCharRefl 'a')) ht
       exact ⟨.nodeCall copyIdx (.choiceL (.seq (.leaf ['a']) t)),
-        MDerives.callOk copyIdx [wexp] { arity := 1, body := copyBody }
-          (('a' :: u') ++ w ++ ('a' :: u')) [] _ copyRule_lookup rfl hbody⟩
+        MDerives.callNameOk copyIdx [wexp] { arity := 1, body := copyBody }
+          (('a' :: u') ++ w ++ ('a' :: u')) [] _ rfl copyRule_lookup rfl hbody⟩
     · subst hcb
       have hstep := ih (exactMatch_step hm 'b') hu'
       have heq : (u' ++ (w ++ ['b']) ++ u') = u' ++ w ++ ('b' :: u') := by simp
       rw [heq] at hstep
       obtain ⟨t, ht⟩ := hstep
-      have hbody : MDerives copyGrammar (MExp.subst [wexp] copyBody)
+      have hbody : MDerives copyGrammar .callByName (MExp.subst [wexp] copyBody)
           (('b' :: u') ++ w ++ ('b' :: u'))
           (.ok (.choiceR (.choiceL (.seq (.leaf ['b']) t))) []) := by
         apply MDerives.altR
@@ -315,8 +317,8 @@ theorem copy_gen {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
             (('b' :: u') ++ w ++ ('b' :: u')) (u' ++ w ++ ('b' :: u')) [] (.leaf ['b']) t
             (MDerives.chrOk 'b' 'b' (u' ++ w ++ ('b' :: u')) (mBeqCharRefl 'b')) ht
       exact ⟨.nodeCall copyIdx (.choiceR (.choiceL (.seq (.leaf ['b']) t))),
-        MDerives.callOk copyIdx [wexp] { arity := 1, body := copyBody }
-          (('b' :: u') ++ w ++ ('b' :: u')) [] _ copyRule_lookup rfl hbody⟩
+        MDerives.callNameOk copyIdx [wexp] { arity := 1, body := copyBody }
+          (('b' :: u') ++ w ++ ('b' :: u')) [] _ rfl copyRule_lookup rfl hbody⟩
 
 /-- **Headline theorem**: `Copy("")` matches `u ++ u` for EVERY `u ∈ {a,b}*`
 — the copy language `{ww}`, a textbook non-context-free language, matched
@@ -324,8 +326,37 @@ by a Macro PEG grammar. A finite Scala test suite
 (`NonTrivialLanguagesSpec.scala`) can only ever check finitely many `u`;
 this is the same claim for all of them at once. -/
 theorem copy_language_ww (u : List Char) (hu : ∀ c ∈ u, c = 'a' ∨ c = 'b') :
-    ∃ t, MDerives copyGrammar (.call copyIdx [.lit []]) (u ++ u) (.ok t []) := by
+    ∃ t, MDerives copyGrammar .callByName (.call copyIdx [.lit []]) (u ++ u) (.ok t []) := by
   have := copy_gen (exactMatch_lit []) u hu
   simpa using this
+
+/-! ## `CallByValuePar` smoke tests
+
+Not a headline theorem (out of scope for this milestone, per
+`docs/roadmap.md`) — just computed confirmation, via the `#guard`
+convention already used elsewhere in this project (e.g. `Json/Grammar.lean`),
+that the `.callByValuePar` semantics added in `MacroPeg/Semantics.lean`/
+`Interp.lean` actually behave as `MacroPegCallByValueParSpec.scala`
+describes: `F(A) = A A A` applied to `"a"`, evaluated under
+`.callByValuePar`, extracts `A`'s VALUE (the substring `"a"` consumed by
+matching `.lit ['a']` against the ORIGINAL, unadvanced input) and splices
+it in three times, matching `"aaa"` in full. -/
+
+def parFIdx : Nat := 0
+
+/-- `F(A) = A A A`. -/
+def parFBody : MExp := .seq (.param 0) (.seq (.param 0) (.param 0))
+
+def parFGrammar : MGrammar := { rules := [{ arity := 1, body := parFBody }] }
+
+#guard renderMPeg (mpegRun parFGrammar .callByValuePar 200 (.call parFIdx [.lit ['a']]) "aaa".toList) == "ok+0"
+
+#guard renderMPeg (mpegRun parFGrammar .callByValuePar 200 (.call parFIdx [.lit ['a']]) "aab".toList) == "fail"
+
+/-! Too short: evaluating the argument against `"aa"` still only extracts a
+single `"a"` (the argument itself doesn't see or care about the rest of the
+body), so the body's three-fold repetition of that same value needs `"aaa"`
+— `"aa"` alone is insufficient. -/
+#guard renderMPeg (mpegRun parFGrammar .callByValuePar 200 (.call parFIdx [.lit ['a']]) "aa".toList) == "fail"
 
 end Shallot.MacroPeg

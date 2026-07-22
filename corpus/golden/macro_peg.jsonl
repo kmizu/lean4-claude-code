@@ -6,3 +6,6 @@
 {"case":"305-mpeg-copy-reject-ab","phase":"eval","status":"ok","result":"fail"}
 {"case":"306-mpeg-copy-reject-aba","phase":"eval","status":"ok","result":"fail"}
 {"case":"307-mpeg-copy-reject-abba","phase":"eval","status":"ok","result":"fail"}
+{"case":"310-mpeg-par-f-aaa","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"311-mpeg-par-f-reject-aab","phase":"eval","status":"ok","result":"fail"}
+{"case":"312-mpeg-par-f-reject-aa","phase":"eval","status":"ok","result":"fail"}

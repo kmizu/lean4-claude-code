@@ -3,13 +3,17 @@ import Shallot.Peg.Syntax
 /-!
 # Macro PEG syntax, parse trees, outcomes
 
-Formalizes the call-by-name core of kmizu/macro_peg (`Evaluator.CallByName`,
-the library's default and most heavily-tested strategy): PEG extended with
-parametrized, recursive rules whose actual parameters are spliced into the
-callee's body as UNEVALUATED expressions (true macro substitution), not
-pre-evaluated values. `CallByValueSeq`/`CallByValuePar` and the separate
-`MacroExpander`-based higher-order/lambda layer are out of scope — see
-docs/roadmap.md.
+Formalizes two of kmizu/macro_peg's three `Evaluator` strategies (M-PEG-2
+adds `CallByValuePar` to M-PEG's `CallByName`; see `Strategy` below and
+`MacroPeg/Semantics.lean`'s module docstring for the `.call` semantics each
+one gets): PEG extended with parametrized, recursive rules. Under
+`CallByName` the actual parameters are spliced into the callee's body as
+UNEVALUATED expressions (true macro substitution); under `CallByValuePar`
+they are evaluated independently against the SAME starting position (a
+lookahead/backreference-style extraction that does not advance the input)
+before splicing in the consumed substrings as literal values.
+`CallByValueSeq` and the separate `MacroExpander`-based higher-order/lambda
+layer remain out of scope — see docs/roadmap.md.
 
 Design, continuing `Shallot.Peg`'s conventions (`Shallot/Peg/Syntax.lean`):
 - rules are `Nat`-indexed (`MGrammar.rules : List MRule`), never named — no
@@ -38,6 +42,16 @@ Design, continuing `Shallot.Peg`'s conventions (`Shallot/Peg/Syntax.lean`):
 -/
 
 namespace Shallot.MacroPeg
+
+/-- Which of `Evaluator`'s argument-passing strategies a derivation/run is
+under. `callByValueSeq` (sequential input-threading evaluation of actual
+parameters) is not yet formalized — a future milestone, see
+docs/roadmap.md — so it has no constructor here (an unhandled case is worse
+than a missing one). -/
+inductive Strategy where
+  | callByName
+  | callByValuePar
+  deriving DecidableEq
 
 inductive MExp where
   /-- ε — always succeeds, consumes nothing. -/
