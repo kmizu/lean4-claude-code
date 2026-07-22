@@ -1,4 +1,4 @@
-# 8. In practice — formalizing macro_peg's call-by-name semantics
+# 8. In practice — formalizing macro_peg's evaluation strategies
 
 **English** | [日本語](../guide/08-macro-peg.html) | [← Chapter 7](07-json.html) | [Table of contents](index.html)
 
@@ -23,8 +23,10 @@ substring as a value — and even between these two there's a difference
 between "sequential consumption" and "lookahead extraction at the same
 position." Every test backing the claims in the README's headline (that it
 can recognize palindromes and the copy language `{ww}` — expressive power
-beyond plain PEG) is a `CallByName` example, so this formalization narrows
-its scope to that one strategy alone.
+beyond plain PEG) is a `CallByName` example. This chapter starts by
+formalizing `CallByName` alone (8.1–8.4), then generalizes `MDerives`/
+`mpegRun` with a `Strategy` parameter to add the remaining two strategies
+(8.5) — by the end, all three are formalized.
 
 `CallByName`'s implementation threads an environment through evaluation,
 with `bindings : Map[Symbol, Expression]` housing both rule names and
@@ -205,7 +207,138 @@ way: the act of writing a universally quantified theorem is what forced the
 question "does this really hold for every `u`?" to be thought through to
 the end.
 
-## 8.5 Lens extraction and the differential harness
+## 8.5 Threading `Strategy` through — `CallByValuePar` and `CallByValueSeq`
+
+Up to this point, `MDerives`/`mpegRun` were `CallByName`-only. Adding the
+remaining two strategies requires a destructive retrofit of the signature
+itself — Lean's `inductive`/`mutual` requires declaring every constructor in
+one place, so there's no option to grow a new `call` rule later on.
+`MDerives (g : MGrammar) : ...` becomes `MDerives (g : MGrammar) (s :
+Strategy) : ...`, and nearly every file under `MacroPeg/` — including the
+already-proved T0–T3 theorems — has to be rewritten.
+
+```lean
+inductive Strategy where
+  | callByName
+  | callByValuePar
+  | callByValueSeq
+  deriving DecidableEq
+```
+
+The existing fifteen rules just thread `s` through unchanged (only `.call`
+is strategy-dependent). `callOk`/`callFail` get renamed to
+`callNameOk`/`callNameFail`, gaining a `hs : s = .callByName` hypothesis,
+and each of the two new strategies gets its own auxiliary relation plus
+three constructors (success, body failure, argument failure).
+
+`CallByValuePar` (arguments evaluated independently, each against the
+**same** input position — a backreference-like strategy) adds
+`DerivesArgsPar`:
+
+```lean
+inductive DerivesArgsPar (g : MGrammar) (s : Strategy) (input : List Char) :
+    List MExp → List MExp → Prop where
+  | nil : DerivesArgsPar g s input [] []
+  | cons (a : MExp) (as : List MExp) (p rest : List Char) (t : MTree) (vs : List MExp)
+      (h1 : MDerives g s a input (.ok t rest))
+      (hp : input = p ++ rest)
+      (h2 : DerivesArgsPar g s input as vs) :
+      DerivesArgsPar g s input (a :: as) (.lit p :: vs)
+```
+
+`input` stays fixed across every argument — each one is evaluated
+independently, starting from the same position. `CallByValueSeq`
+(arguments evaluated **left to right**, threading the consumed input
+position through each in turn), by contrast, carries `final` — the
+position left over after every argument has been evaluated — instead of a
+fixed `input`:
+
+```lean
+inductive DerivesArgsSeq (g : MGrammar) (s : Strategy) :
+    List Char → List MExp → List MExp → List Char → Prop where
+  | nil (input : List Char) : DerivesArgsSeq g s input [] [] input
+  | cons (a : MExp) (as : List MExp) (input p rest final : List Char) (t : MTree) (vs : List MExp)
+      (h1 : MDerives g s a input (.ok t rest))
+      (hp : input = p ++ rest)
+      (h2 : DerivesArgsSeq g s rest as vs final) :
+      DerivesArgsSeq g s input (a :: as) (.lit p :: vs) final
+```
+
+The one essential difference from `DerivesArgsPar` is that `cons`'s
+recursive call evaluates the next argument against `rest` — the position
+left over after the current one. `CallByValueSeq`'s call rule, `callSeqOk`,
+derives the rule body from this `final` (called `mid` in the invocation
+site) — in contrast to `CallByValuePar`'s `callParOk`, which always derives
+the body from the **original** `input`.
+
+### Getting "if any argument fails, the whole call fails" right
+
+The first draft of `callParArgFail` (the rule that fails the whole call
+when any one argument fails) only required `badArg ∈ args` — some argument
+in the list fails — with no constraint on the arguments before it. The
+agent trying to prove completeness (T3) mechanically discovered that this
+rule **contradicts the reference implementation's left-to-right
+short-circuit evaluation**: if a non-terminating argument sits before
+`badArg`, a derivation exists, yet `mpegRun` can never realize that `.fail`
+at any fuel level (it returns `none` forever) — a counterexample the agent
+constructed. Rather than papering over it with `sorry`, it reported a
+provable disproof, and the rule was fixed:
+
+```lean
+| callParArgFail (i : Nat) (pre : List MExp) (badArg : MExp) (post : List MExp) (r : MRule)
+    (input : List Char) (preVals : List MExp)
+    (hs : s = .callByValuePar)
+    (hr : ruleAtM g.rules i = some r)
+    (ha : r.arity = (pre ++ badArg :: post).length)
+    (hpre : DerivesArgsPar g s input pre preVals)
+    (hfail : MDerives g s badArg input .fail) :
+    MDerives g s (.call i (pre ++ badArg :: post)) input .fail
+```
+
+Requiring an explicit split `args = pre ++ badArg :: post`, together with
+`hpre : DerivesArgsPar g s input pre preVals` (evidence that everything
+before `badArg` succeeded), makes the rule match `evalArgsPar`'s
+left-to-right short-circuit evaluation exactly.
+
+`CallByValueSeq`'s `callSeqArgFail`, written after this bug had already
+been hit once, sidesteps the same trap proactively — it was written from
+the start with the correct shape, `pre ++ badArg :: post` plus `hpre :
+DerivesArgsSeq g s input pre preVals mid` (evidence that everything before
+`badArg` succeeded, threaded all the way to `mid`), so no rework was needed
+during the completeness proof. Following sepOkB (Chapter 4), the uppercase
+`E` (Chapter 7), and the `{a,b}*` restriction (8.4), this is another
+instance of a pattern this project keeps running into — a spec hole that
+only surfaces once you actually write the proof — but also, unusually, a
+case where a hole found once was documented into the next design and
+didn't recur.
+
+### P1 becomes non-trivial under `CallByValueSeq`
+
+The proof of P1 (`mderives_suffix`: a successful derivation consumes a
+prefix of the input) uses mutual induction via `MDerives.rec`, which
+requires `motive_2` (for `DerivesArgsPar`) and `motive_3` (for
+`DerivesArgsSeq`). Every `CallByValuePar` constructor reduces to the same
+argument as `CallByName` — "the body's sub-derivation consumes the input"
+— so `motive_2` could stay the trivial `True`. But `callSeqOk` derives the
+body from the **final threaded position** `mid` reached after evaluating
+the arguments, so its sub-derivation only yields `mid = p ++ rest`.
+Recovering `input = _ ++ rest` needs a separate fact — that evaluating the
+arguments in sequence itself consumed the prefix from `input` to `mid` —
+which can be assembled from the `hp : input = p ++ rest` carried by each
+`DerivesArgsSeq` `cons` step. So `motive_3` had to become the non-trivial
+predicate `∃ q, input = q ++ final`, carried as the induction hypothesis.
+Even for the "same" auxiliary argument relation, whether or not the
+position gets threaded changes how much information the proof needs to
+carry.
+
+The proof technique for T0–T3 itself (strong induction on fuel, mutual
+induction on derivation structure) carried over unchanged from the
+`CallByName` stage. What was genuinely new boils down to the two things
+seen here: getting the shape of "the whole call fails if any one argument
+does" right, and how threading the position changes what information the
+proof needs.
+
+## 8.6 Lens extraction and the differential harness
 
 Since `mpegRun` is fuel-based structural recursion isomorphic in shape to
 `pegRun`, the extractor Lens's equation-lemma route went through as-is,
@@ -217,24 +350,26 @@ same style as `beqChar`/`leChar`, made it go through — the same pattern
 that `.chr`/`.range` already follow.
 
 The differential harness also follows the existing design as-is. The
-`shallot-cli macro-dump` subcommand runs the extracted `MacroPeg_mpegRun`,
-and `make verify` continuously checks three-way agreement — Lean-native
-execution ≡ golden ≡ extracted-Scala execution — against
-`corpus/golden/macro_peg.jsonl` (eight copy-language witnesses).
+`shallot-cli macro-dump` subcommand runs the extracted `MacroPeg_mpegRun`
+against a single `MacroPeg_mCases` table (holding witnesses for all three
+strategies together), and `make verify` continuously checks three-way
+agreement — Lean-native execution ≡ golden ≡ extracted-Scala execution —
+against `corpus/golden/macro_peg.jsonl` (8 `CallByName` cases, 3
+`CallByValuePar` cases, 3 `CallByValueSeq` cases — 14 total). Adding each
+new strategy left the three-way-agreement machinery itself untouched — a
+new `Strategy` just means new rows in `MacroPeg_mCases`.
 
-## 8.6 What was left out of scope this time
+## 8.7 What was left out of scope this time
 
-- **The `CallByValueSeq`/`CallByValuePar` strategies**: these would require
-  generalizing `MDerives` with a strategy parameter, which we've carved out
-  as a future milestone
 - **The higher-order function layer** (lambdas `(x -> e)`, currying,
   first-class function values): even in the reference implementation, this
   isn't a native feature of `Evaluator`; it only works through a separate
   utility, `MacroExpander`, via a syntactic inlining pass that "expands
   everything before the call," which carries a non-termination risk (and
   can't be used with recursive macros). This time, we scoped the work to
-  just the core that backs macro_peg's headline expressive-power claim:
-  "recursive macros that take expression parameters as data values"
+  the core that backs macro_peg's headline expressive-power claim —
+  recursive macros that take expression parameters as data values — across
+  all three evaluation strategies
 
 ---
 

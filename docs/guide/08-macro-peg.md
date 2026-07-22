@@ -1,4 +1,4 @@
-# 8. 応用編 — macro_peg の call-by-name 意味論を形式化する
+# 8. 応用編 — macro_peg の評価戦略を形式化する
 
 [English](../en/08-macro-peg.html) | **日本語** ｜ [← 7章](07-json.html) ｜ [目次](../index.html)
 
@@ -17,7 +17,9 @@ macro_peg の `Evaluator.scala` を読むと、マクロ呼び出しの実引数
 消費しながら実引数を先に評価し、消費した部分文字列を値として渡す——2 つの間でも「逐次消費」
 と「同一位置での先読み抽出」という違いがあります。README の見出しの主張（回文やコピー言語
 `{ww}` を認識できる、というPEGを超える表現力の話）を裏付けるテストは全て `CallByName` の
-例なので、今回の形式化はこれ 1 本に絞りました。
+例です。この章はまず `CallByName` から形式化を始め（8.1〜8.4）、その後 `Strategy`
+パラメータで `MDerives`/`mpegRun` を一般化して残り 2 戦略を追加します（8.5）——
+最終的に 3 戦略すべてを形式化しています。
 
 `CallByName` の実装は環境スレッディング方式で、`bindings : Map[Symbol, Expression]` に
 規則名とパラメータ名を同居させています。ここで目を引くのが `extract()` という関数です。
@@ -160,7 +162,120 @@ theorem copy_fail_short {wexp : MExp} {w : List Char} (hm : ExactMatch wexp w) :
 自体が、「本当にすべての `u` について成り立つか」を突き詰めて考えさせた、という言い方も
 できます。
 
-## 8.5 Lens 抽出と差分ハーネス
+## 8.5 `Strategy` を通す — `CallByValuePar` と `CallByValueSeq`
+
+ここまでは `CallByName` 専用の `MDerives`/`mpegRun` でした。残り 2 戦略を足すには、
+署名そのものを変更する破壊的な retrofit が要ります——Lean の `inductive`/`mutual` は
+「1 箇所で全コンストラクタを宣言」を要求するので、新しい `call` 規則を後から生やす
+という選択肢がありません。`MDerives (g : MGrammar) : ...` は
+`MDerives (g : MGrammar) (s : Strategy) : ...` になり、T0-T3 の証明済み定理も含め
+`MacroPeg/` 以下のほぼ全ファイルを書き直すことになります。
+
+```lean
+inductive Strategy where
+  | callByName
+  | callByValuePar
+  | callByValueSeq
+  deriving DecidableEq
+```
+
+既存 15 規則は `s` を素通しするだけ（戦略が効くのは `.call` だけ）。`callOk`/`callFail`
+は `hs : s = .callByName` を前提に足した `callNameOk`/`callNameFail` に改名し、
+2 つの戦略それぞれに新しい補助関係と 3 本ずつのコンストラクタ（正常終了・本体失敗・
+実引数失敗）を追加します。
+
+`CallByValuePar`（実引数を**同一の入力位置**に対して独立に評価する、バックリファレンス
+風の戦略）には `DerivesArgsPar` を追加：
+
+```lean
+inductive DerivesArgsPar (g : MGrammar) (s : Strategy) (input : List Char) :
+    List MExp → List MExp → Prop where
+  | nil : DerivesArgsPar g s input [] []
+  | cons (a : MExp) (as : List MExp) (p rest : List Char) (t : MTree) (vs : List MExp)
+      (h1 : MDerives g s a input (.ok t rest))
+      (hp : input = p ++ rest)
+      (h2 : DerivesArgsPar g s input as vs) :
+      DerivesArgsPar g s input (a :: as) (.lit p :: vs)
+```
+
+`input` が全実引数を通じて固定されている——各実引数は独立に、同じ開始位置から評価
+されます。対して `CallByValueSeq`（実引数を**左から順に**評価し、消費した入力位置を
+次の実引数へスレッディングする戦略）の `DerivesArgsSeq` は `input` の代わりに
+`final`（全実引数を評価し終えた最終位置）を運びます：
+
+```lean
+inductive DerivesArgsSeq (g : MGrammar) (s : Strategy) :
+    List Char → List MExp → List MExp → List Char → Prop where
+  | nil (input : List Char) : DerivesArgsSeq g s input [] [] input
+  | cons (a : MExp) (as : List MExp) (input p rest final : List Char) (t : MTree) (vs : List MExp)
+      (h1 : MDerives g s a input (.ok t rest))
+      (hp : input = p ++ rest)
+      (h2 : DerivesArgsSeq g s rest as vs final) :
+      DerivesArgsSeq g s input (a :: as) (.lit p :: vs) final
+```
+
+`cons` の再帰が次の実引数を `rest`（今の実引数が消費した残り）に対して評価している点が
+`DerivesArgsPar` との唯一だが本質的な違いです。`CallByValueSeq` 側の呼び出し規則
+`callSeqOk` は、規則本体をこの `final`（`DerivesArgsSeq` の呼び出し記法では `mid`）
+から導出します——`CallByValuePar` の `callParOk` が本体を常に**元の** `input` から
+導出するのとは対照的です。
+
+### 「実引数のどれかが失敗したら呼び出し全体が失敗する」を正しく書く
+
+`callParArgFail`（実引数のどれかが失敗したときに呼び出し全体を失敗させる規則）の
+最初のドラフトは、`badArg ∈ args`（リストのどこかに失敗する実引数がある）としか
+要求しておらず、`badArg` より前の実引数の成否を一切制約していませんでした。完全性
+（T3）を証明しようとしたエージェントが、この規則が**参照実装の左から右への短絡評価と
+矛盾する**ことを機械的に発見しました——`badArg` より前に非停止な実引数があると、
+導出は存在するのに `mpegRun` はどの燃料でも決してその `.fail` を実現できない（`none`
+を返し続ける）反例が構築できてしまうのです。`sorry` で誤魔化す代わりに、証明可能な
+disproof を添えて報告され、修正されました：
+
+```lean
+| callParArgFail (i : Nat) (pre : List MExp) (badArg : MExp) (post : List MExp) (r : MRule)
+    (input : List Char) (preVals : List MExp)
+    (hs : s = .callByValuePar)
+    (hr : ruleAtM g.rules i = some r)
+    (ha : r.arity = (pre ++ badArg :: post).length)
+    (hpre : DerivesArgsPar g s input pre preVals)
+    (hfail : MDerives g s badArg input .fail) :
+    MDerives g s (.call i (pre ++ badArg :: post)) input .fail
+```
+
+`args = pre ++ badArg :: post` という明示的な分割と、`hpre : DerivesArgsPar g s input
+pre preVals`（`badArg` より前がすべて成功している証拠）を要求することで、
+`evalArgsPar` の左から右への短絡評価と正確に対応するようになりました。
+
+このバグを踏んだあとに書いた `CallByValueSeq` 側の `callSeqArgFail` は、同じ罠を
+先回りで回避しています——最初から `pre ++ badArg :: post` ＋
+`hpre : DerivesArgsSeq g s input pre preVals mid`（`badArg` より前がすべて成功し、
+かつ `mid` までスレッディング済みである証拠）という正しい形で書かれ、完全性の証明で
+作り直す手戻りは発生しませんでした。sepOkB（4 章）・大文字 `E`（7 章）・`{a,b}*`
+制限（8.4）に続き、このプロジェクトで何度も見てきた「証明を書いて初めて仕様の穴が
+見つかる」パターンの一例であると同時に、**一度見つけた穴を次の設計に明文化して
+再発を防げた**という珍しい例でもあります。
+
+### P1 が `CallByValueSeq` で非自明になる
+
+P1（`mderives_suffix`：成功した導出は入力の接頭辞を消費する）の証明はミューチュアル
+帰納法 `MDerives.rec` で `motive_2`（`DerivesArgsPar` 用）・`motive_3`
+（`DerivesArgsSeq` 用）を要求します。`CallByValuePar` の全コンストラクタは
+「本体の副次導出が入力を消費する」という `CallByName` と同じ議論に還元できるので、
+`motive_2` は自明な `True` で済みました。ところが `callSeqOk` は本体を実引数評価の
+**最終スレッディング位置** `mid` から導出するため、その副次導出からは
+`mid = p ++ rest` しか得られません。`input = _ ++ rest` を回復するには、
+「実引数の逐次評価自体が `input` から `mid` までの接頭辞を消費した」という事実が
+別途必要で、これは `DerivesArgsSeq` の各 `cons` ステップが持つ `hp : input = p ++
+rest` から組み立てられます。そこで `motive_3` を `∃ q, input = q ++ final` という
+非自明な述語にし、帰納法の仮定として運びました。同じ「実引数の補助関係」でも、
+位置をスレッディングするかどうかで証明に要求される情報量が変わる、という例です。
+
+T0-T3 の証明手法そのもの（燃料についての強い帰納法／導出構造についてのミューチュアル
+帰納法）は `CallByName` の段階で確立したものがそのまま転用できました。新規性が
+あったのは、ここで見た 2 点——「実引数が 1 つでも失敗したら呼び出し全体が失敗する」
+規則の正しい形と、位置のスレッディングが証明に要求する情報の違い——に集約されます。
+
+## 8.6 Lens 抽出と差分ハーネス
 
 `mpegRun` は `pegRun` と同型の燃料付き構造的再帰なので、抽出器 Lens の等式補題ルートは
 新規の対応なしにそのまま通りました——ただし 1 点だけ既存のホワイトリストに引っかかりました。
@@ -170,20 +285,21 @@ Bool の `==` を使うよう書き換えると通りました——`.chr`/`.ran
 同じパターンです。
 
 差分ハーネスも既存の設計をそのまま踏襲しています。`shallot-cli macro-dump` サブコマンドが
-抽出済み `MacroPeg_mpegRun` を実行し、`corpus/golden/macro_peg.jsonl`（コピー言語の
-witness 8 件）に対して Lean ネイティブ実行 ≡ golden ≡ Scala 抽出実行の 3 方一致を
-`make verify` の中で常時検査します。
+抽出済み `MacroPeg_mpegRun` を、単一の `MacroPeg_mCases` テーブル（3 戦略ぶんの
+witness をまとめて持つ）に対して実行し、`corpus/golden/macro_peg.jsonl`
+（`CallByName` 8 件・`CallByValuePar` 3 件・`CallByValueSeq` 3 件、計 14 件）に
+対して Lean ネイティブ実行 ≡ golden ≡ Scala 抽出実行の 3 方一致を `make verify` の
+中で常時検査します。新しい戦略を足すたびに、この 3 方一致の仕組み自体には手を
+入れていません——`Strategy` が増えても `MacroPeg_mCases` に行を足すだけです。
 
-## 8.6 今回の範囲外にしたもの
+## 8.7 今回の範囲外にしたもの
 
-- **`CallByValueSeq`/`CallByValuePar` 戦略**: `MDerives` を strategy パラメータで
-  一般化する必要があり、将来のマイルストーンとして切り出しました
 - **高階関数レイヤー**（ラムダ `(x -> e)`・カリー化・第一級関数値）: 参照実装でも
   `Evaluator` のネイティブ機能ではなく、別ユーティリティ `MacroExpander` による
   「呼び出し前に全展開する」非停止性リスクのある構文的インライン化パス経由でしか
   動作しません（再帰マクロには使えない）。今回は「データ値としての式パラメータを
-  取る再帰マクロ」という、macro_peg の見出しの表現力主張を支えている核だけを
-  対象にしました
+  取る再帰マクロ」という、macro_peg の見出しの表現力主張を支えている核——
+  3 つの評価戦略すべて——を対象にしました
 
 ---
 
