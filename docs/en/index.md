@@ -26,7 +26,7 @@ generator or read Ford's paper, you are exactly who this was written for.
 - [Theorem inventory (machine-audited)](../theorems.html) *(Japanese)*
 - [The extractable subset](../extractable-subset.html) *(Japanese)*
 - [Development roadmap](../roadmap.html) *(Japanese)*
-- [The repository](https://github.com/kmizu/lean4-claude-code)
+- [The repository](https://github.com/kmizu/lean4-peg)
 
 ## In three lines
 

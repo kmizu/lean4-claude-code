@@ -25,7 +25,7 @@
 - [定理一覧（機械監査済み）](theorems.html)
 - [抽出可能サブセットの仕様](extractable-subset.html)
 - [開発ロードマップ（全マイルストーンの記録）](roadmap.html)
-- [リポジトリ本体](https://github.com/kmizu/lean4-claude-code)
+- [リポジトリ本体](https://github.com/kmizu/lean4-peg)
 
 ## 3行でいうと
 

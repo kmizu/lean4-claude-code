@@ -2,7 +2,7 @@
 
 [English](../en/06-reading-guide.html) | **日本語** ｜ [← 5章](05-lens.html) ｜ [目次](../index.html)
 
-最後に、[リポジトリ](https://github.com/kmizu/lean4-claude-code)を自分で
+最後に、[リポジトリ](https://github.com/kmizu/lean4-peg)を自分で
 歩きたい人のための地図を置いておきます。
 
 ## 6.1 地図

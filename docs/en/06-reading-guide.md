@@ -3,7 +3,7 @@
 **English** | [日本語](../guide/06-reading-guide.html) | [← Chapter 5](05-lens.html) | [Table of Contents](index.html)
 
 Finally, here is a map for anyone who wants to walk through the
-[repository](https://github.com/kmizu/lean4-claude-code) on their own.
+[repository](https://github.com/kmizu/lean4-peg) on their own.
 
 ## 6.1 The Map
 
