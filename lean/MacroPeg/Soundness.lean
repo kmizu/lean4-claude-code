@@ -3,12 +3,12 @@ import MacroPeg.Interp
 import MacroPeg.Props
 
 /-!
-# T1 — interpreter soundness (Macro PEG, call-by-name + call-by-value-par)
+# T1 — interpreter soundness (Macro PEG, call-by-name + call-by-value-par + call-by-value-seq)
 
 `mpegRun g s f e x = some o → MDerives g s e x o`. Mirrors
 `Shallot.Peg.Soundness.pegRun_sound`/M-PEG's own prior `mpegRun_sound` for
-the shared cases, retrofitted with `s` threaded through and a new
-`.callByValuePar` branch.
+the shared cases, retrofitted with `s` threaded through and new
+`.callByValuePar` / `.callByValueSeq` branches.
 
 Just like `mpegRun_mono`/`evalArgsPar_mono_of_mpegRun_mono` in `Fuel.lean`,
 the `.callByValuePar` case does NOT need a genuinely mutual induction: a
@@ -21,11 +21,23 @@ That parameter is exactly `ih` inside `mpegRun_sound`'s own
 `mpegRun` at `f+1` uses `evalArgsPar` at the INNER fuel `f`, and `ih` is
 soundness at that same `f`.
 
+The `.callByValueSeq` case is structurally identical, with its own companion
+`evalArgsSeq_sound_of_mpegRun_sound`. Two twists mirror `Fuel.lean`'s Seq
+work: (a) `evalArgsSeq`'s `cons` threads the remainder `rest` into the tail's
+evaluation (unlike `evalArgsPar`, which keeps `input` fixed), so the list
+induction GENERALIZES over `input` — otherwise `ih` would be pinned to the
+original `input` and useless at `rest`; and (b) the success conclusion must
+produce BOTH a `DerivesArgsSeq` derivation AND the threaded final position
+`mid`, and the failure conclusion pins the failing argument to that threaded
+`mid` (not to `input`), so its existential carries an extra `mid` witness.
+The callee body is then derived from `mid` (`callSeqOk`/`callSeqFail`), not
+from the original `x`.
+
 Proof-engineering notes (same discipline as `Fuel.lean`): `rw
-[mpegRun.eq_def]`/`rw [evalArgsPar.eq_def]` + `dsimp only` to unfold one
-layer; `by_cases hbeq : (r.arity == args.length) = true` +
-`simp only [if_pos/if_neg]` for the arity check (Bool, not Prop `≠` —
-matches `Fuel.lean`'s working idiom); the interpreter's inner-star
+[mpegRun.eq_def]`/`rw [evalArgsPar.eq_def]`/`rw [evalArgsSeq.eq_def]` +
+`dsimp only` to unfold one layer; `by_cases hbeq : (r.arity == args.length)
+= true` + `simp only [if_pos/if_neg]` for the arity check (Bool, not Prop `≠`
+— matches `Fuel.lean`'s working idiom); the interpreter's inner-star
 `some .fail` branch is refuted by `mStarNeverFails`.
 -/
 
@@ -145,6 +157,84 @@ theorem evalArgsPar_sound_of_mpegRun_sound {g : MGrammar} {s : Strategy} {f : Na
               rw [hpeq]
               exact DerivesArgsPar.cons a as input p rest t vs hd1 hp (ihSome vs rfl)
             · intro hcon; exact absurd hcon (by simp)
+
+/-- Seq analogue of `evalArgsPar_sound_of_mpegRun_sound`. If `mpegRun` is
+sound at fuel level `f` (the exact fact `mpegRun_sound`'s own induction hands
+you as `ih`), then whatever `evalArgsSeq` returns at that same level is
+derivable via `DerivesArgsSeq` — the success case producing BOTH the
+derivation AND the threaded final position `mid`, the failure case witnessing
+a failing argument AT its threaded position `mid` (not at the original
+`input`). Because `evalArgsSeq`'s `cons` threads the remainder `rest` into
+the tail's evaluation (unlike `evalArgsPar`, which keeps `input` fixed), the
+list induction GENERALIZES over `input` — exactly as
+`evalArgsSeq_mono_of_mpegRun_mono` does in `Fuel.lean` — so `ih` is available
+at the threaded `rest`, not pinned to the original `input`. -/
+theorem evalArgsSeq_sound_of_mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat}
+    (hM : ∀ {e : MExp} {x : List Char} {o : MOutcome},
+      mpegRun g s f e x = some o → MDerives g s e x o) :
+    ∀ {input : List Char} {args : List MExp} {r : Option (List MExp × List Char)},
+      evalArgsSeq g s f input args = some r →
+        (∀ vals mid, r = some (vals, mid) → DerivesArgsSeq g s input args vals mid) ∧
+        (r = none → ∃ pre badArg post preVals mid, args = pre ++ badArg :: post ∧
+          DerivesArgsSeq g s input pre preVals mid ∧ MDerives g s badArg mid .fail) := by
+  intro input args
+  induction args generalizing input with
+  | nil =>
+    intro r h
+    simp only [evalArgsSeq] at h
+    cases h
+    refine ⟨?_, ?_⟩
+    · intro vals mid hv; cases hv; exact DerivesArgsSeq.nil input
+    · intro hn; cases hn
+  | cons a as ih =>
+    intro r h
+    rw [evalArgsSeq.eq_def] at h
+    dsimp only at h
+    cases h1 : mpegRun g s f a input with
+    | none => rw [h1] at h; exact absurd h (by simp)
+    | some o1 =>
+      rw [h1] at h
+      have hd1 := hM h1
+      cases o1 with
+      | fail =>
+        dsimp only at h
+        cases h
+        refine ⟨?_, ?_⟩
+        · intro vals mid hv; cases hv
+        · intro _
+          exact ⟨[], a, as, [], input, rfl, DerivesArgsSeq.nil input, hd1⟩
+      | ok t rest =>
+        dsimp only at h
+        cases h2 : evalArgsSeq g s f rest as with
+        | none => rw [h2] at h; exact absurd h (by simp)
+        | some o2 =>
+          rw [h2] at h
+          obtain ⟨ihSome, ihNone⟩ := ih h2
+          cases o2 with
+          | none =>
+            dsimp only at h
+            cases h
+            refine ⟨?_, ?_⟩
+            · intro vals mid hv; cases hv
+            · intro _
+              obtain ⟨pre', badArg, post, preVals', mid', heq, hpre', hbad⟩ := ihNone rfl
+              obtain ⟨p, hp⟩ := mderives_suffix hd1 t rest rfl
+              refine ⟨a :: pre', badArg, post, .lit p :: preVals', mid', by simp [heq], ?_, hbad⟩
+              exact DerivesArgsSeq.cons a pre' input p rest mid' t preVals' hd1 hp hpre'
+          | some p2 =>
+            cases p2 with
+            | mk vs final =>
+              dsimp only at h
+              cases h
+              refine ⟨?_, ?_⟩
+              · intro vals mid hv
+                cases hv
+                obtain ⟨p, hp⟩ := mderives_suffix hd1 t rest rfl
+                have hpeq : prefixBeforeSuffix input rest = p := by
+                  rw [hp]; exact prefixBeforeSuffix_correct p rest
+                rw [hpeq]
+                exact DerivesArgsSeq.cons a as input p rest final t vs hd1 hp (ihSome vs final rfl)
+              · intro hcon; exact absurd hcon (by simp)
 
 /-- T1 — soundness: whatever the interpreter returns is derivable. -/
 theorem mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : List Char} {o : MOutcome}
@@ -276,6 +366,38 @@ theorem mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : Li
                     dsimp only at h
                     cases h
                     exact MDerives.callParOk i args r x rest vals t rfl hr ha hargs (ih h2)
+          | callByValueSeq =>
+            dsimp only at h
+            cases h1 : evalArgsSeq g .callByValueSeq f x args with
+            | none => rw [h1] at h; exact absurd h (by simp)
+            | some o1 =>
+              rw [h1] at h
+              obtain ⟨hSome, hNone⟩ := evalArgsSeq_sound_of_mpegRun_sound (@ih) h1
+              cases o1 with
+              | none =>
+                dsimp only at h
+                cases h
+                obtain ⟨pre, badArg, post, preVals, mid, heq, hpre, hbad⟩ := hNone rfl
+                rw [heq]
+                exact MDerives.callSeqArgFail i pre badArg post r x mid preVals rfl hr (heq ▸ ha) hpre hbad
+              | some p =>
+                cases p with
+                | mk vals mid =>
+                  dsimp only at h
+                  have hargs := hSome vals mid rfl
+                  cases h2 : mpegRun g .callByValueSeq f (MExp.subst vals r.body) mid with
+                  | none => rw [h2] at h; exact absurd h (by simp)
+                  | some o2 =>
+                    rw [h2] at h
+                    cases o2 with
+                    | fail =>
+                      dsimp only at h
+                      cases h
+                      exact MDerives.callSeqFail i args r x mid vals rfl hr ha hargs (ih h2)
+                    | ok t rest =>
+                      dsimp only at h
+                      cases h
+                      exact MDerives.callSeqOk i args r x mid rest vals t rfl hr ha hargs (ih h2)
         · simp only [if_neg hbeq] at h
           cases h
           have hne : r.arity ≠ args.length := by

@@ -86,7 +86,7 @@
 i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版は 318 ファイル
 全件で Lean 側と判定同一（不正 UTF-8 の扱い込み）。`make verify` に常設。
 
-## Macro PEG（M-PEG / M-PEG-2）: kmizu/macro_peg の call-by-name + call-by-value-par 意味論
+## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3）: kmizu/macro_peg の三戦略意味論
 
 `MExp`（`.param k` = 現在の規則活性化の第 k 実引数、`.call i args` = 規則 i 呼び出し）
 と、それに対する新しい導出関係 `MDerives` / インタプリタ `mpegRun` を独立モジュール
@@ -95,8 +95,11 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
 整形式性仮定ゼロ、fuel 総称インタプリタ）を踏襲する並行実装。M-PEG（`CallByName`
 のみ）の後続として、M-PEG-2 で `Strategy`（`.callByName` / `.callByValuePar`）
 パラメータを `MDerives`/`mpegRun` に通し、`CallByValuePar`（実引数を同一位置で
-独立評価するバックリファレンス風の戦略）を追加した——既存ファイルへの retrofit
-であり、既存の5定理・headline定理も含めすべて再検証済み。
+独立評価するバックリファレンス風の戦略）を追加。さらに M-PEG-3 で `Strategy` に
+`.callByValueSeq` を加え、`CallByValueSeq`（実引数を左から順に評価し、消費した
+入力位置を次の引数へスレッディングし、規則本体はその最終位置から始まる戦略）を
+形式化した——いずれも既存ファイルへの retrofit であり、既存の5定理・headline定理
+も含めすべて再検証済み。
 
 | 定理 | 内容 | 公理 |
 |------|------|------|
@@ -112,10 +115,10 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   パラメータを名前で表現し、`extract()` という手製の変数捕獲回避関数を必要とする。
   Lean 側はパラメータを「現在の規則活性化の第 k 引数」という 1 段の de Bruijn
   インデックスで表現し、単純な構造的置換 `MExp.subst` だけで capture-free になる
-- **スコープ**: `CallByName`＋`CallByValuePar` を形式化。`CallByValueSeq` と、
-  別ユーティリティ `MacroExpander` 経由でのみ動作する高階関数（ラムダ・カリー化）
-  レイヤーは対象外——前者は将来のマイルストーン、後者は非停止性リスクのある
-  構文的インライン化パスでネイティブ機能ではない
+- **スコープ**: `CallByName`＋`CallByValuePar`＋`CallByValueSeq`（macro_peg の
+  三戦略すべて）を形式化。別ユーティリティ `MacroExpander` 経由でのみ動作する
+  高階関数（ラムダ・カリー化）レイヤーのみ対象外——非停止性リスクのある構文的
+  インライン化パスでネイティブ機能ではない
 - **`callParArgFail` は証明が見つけた本物の設計バグだった**:
   `CallByValuePar` の「実引数のどれかが失敗したら呼び出し全体が失敗する」という
   規則の最初のドラフトは、`badArg ∈ args`（リストのどこかに失敗する引数がある）
@@ -128,6 +131,23 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   という明示的な分割と `hpre : DerivesArgsPar g s input pre preVals`（`badArg` より
   前がすべて成功している証拠）を追加。これで `evalArgsPar` の左から右への
   短絡評価と正確に対応するようになり、T3 は sorry ゼロで通った
+- **`callSeqArgFail` は同じ罠を先回りで回避した**: M-PEG-3 の設計時点で
+  `callParArgFail` の教訓（前の実引数の成否を制約しないと不健全になる）を
+  プロンプトに明示したため、`callSeqArgFail` は最初から `args = pre ++ badArg :: post`
+  ＋ `hpre : DerivesArgsSeq g s input pre preVals mid`（`badArg` より前がすべて
+  成功し、かつ `mid` までスレッディング済みである証拠）という正しい形で書かれ、
+  T3 で作り直す手戻りは発生しなかった
+- **P1（`mderives_suffix`）は `CallByValueSeq` で `motive_3` が非自明になった**:
+  `CallByValuePar` の Par 系ケースは全て「本体の副次導出 `hd` が入力を消費する」
+  という `CallByName` と同じ議論に還元でき、`DerivesArgsPar` についての帰納法の
+  仮定（`motive_2`）は使われないので `True` で済んだ。ところが `callSeqOk` は本体
+  を「実引数評価が消費し終えた最終位置 `mid`」から導出するため、`hd` からは
+  `mid = p ++ rest` しか出ず、`input = _ ++ rest` を得るには「実引数の逐次評価
+  自体が `input` から `mid` までの接頭辞を消費した」という事実が別途要る。これは
+  `DerivesArgsSeq` の各 `cons` ステップが持つ `hp : input = p ++ rest` から直接
+  組み立てられるので、`motive_3` を `∃ q, input = q ++ final` という非自明な述語
+  にして帰納法の仮定として運ぶ形にした——同じ「引数の補助関係」でも、位置を
+  スレッディングするかどうかで証明に要求される情報量が変わる好例
 - **`copy_gen` の一般化**: 帰納法は `u` に対して行うが、`Copy` の再帰呼び出しの実引数
   `w "a"` は call-by-name のため評価されず構文木のまま渡る（`.lit` に平坦化されない）。
   よって「アキュムレータは `.lit w` である」という形の帰納法は成立せず、`ExactMatch`

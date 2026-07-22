@@ -359,4 +359,45 @@ body), so the body's three-fold repetition of that same value needs `"aaa"`
 — `"aa"` alone is insufficient. -/
 #guard renderMPeg (mpegRun parFGrammar .callByValuePar 200 (.call parFIdx [.lit ['a']]) "aa".toList) == "fail"
 
+/-! ## `CallByValueSeq` smoke tests
+
+Same discipline as the `CallByValuePar` block above — computed confirmation
+via `#guard`, not a headline theorem. Mirrors
+`MacroPegCallByValueSeqSpec.scala`'s `"simple"` example: `F(A, B, C) =
+"abc"; S = F("a", "b", "c");` on `"abcabc"`. Under `.callByValueSeq` the
+three actual parameters are evaluated IN SEQUENCE, each against whatever
+input the previous one left off at — `"a"` against `"abcabc"` (leaving
+`"bcabc"`), `"b"` against `"bcabc"` (leaving `"cabc"`), `"c"` against
+`"cabc"` (leaving `"abc"`) — and only THEN is the body `A B C` (= `"abc"`
+once substituted) derived, starting from that final threaded position
+`"abc"`, matching it exactly. Contrast with `CallByValuePar`'s `parFGrammar`
+above, where the body always starts back at the ORIGINAL input. -/
+
+def seqFIdx : Nat := 0
+
+/-- `F(A, B, C) = A B C`. -/
+def seqFBody : MExp := .seq (.param 0) (.seq (.param 1) (.param 2))
+
+def seqFGrammar : MGrammar := { rules := [{ arity := 3, body := seqFBody }] }
+
+#guard renderMPeg
+  (mpegRun seqFGrammar .callByValueSeq 200
+    (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) "abcabc".toList) == "ok+0"
+
+/-! Wrong last character: the first two arguments still thread through `"a"`
+then `"b"` exactly as above, leaving `"cabx"`; the THIRD argument `"c"` is
+evaluated against that (still matches, `"c"` is a prefix of `"cabx"`,
+leaving `"abx"`) — so argument evaluation itself does not notice the flaw at
+all, it only surfaces once the body `"abc"` is matched against the final
+threaded position `"abx"` and fails on the last character. -/
+#guard renderMPeg
+  (mpegRun seqFGrammar .callByValueSeq 200
+    (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) "abcabx".toList) == "fail"
+
+/-! Too short: after threading through all three arguments (leaving `""`),
+the body `"abc"` has nothing left to match. -/
+#guard renderMPeg
+  (mpegRun seqFGrammar .callByValueSeq 200
+    (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) "abc".toList) == "fail"
+
 end Shallot.MacroPeg

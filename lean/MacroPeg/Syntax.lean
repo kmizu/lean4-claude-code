@@ -3,17 +3,23 @@ import Shallot.Peg.Syntax
 /-!
 # Macro PEG syntax, parse trees, outcomes
 
-Formalizes two of kmizu/macro_peg's three `Evaluator` strategies (M-PEG-2
-adds `CallByValuePar` to M-PEG's `CallByName`; see `Strategy` below and
-`MacroPeg/Semantics.lean`'s module docstring for the `.call` semantics each
-one gets): PEG extended with parametrized, recursive rules. Under
-`CallByName` the actual parameters are spliced into the callee's body as
-UNEVALUATED expressions (true macro substitution); under `CallByValuePar`
-they are evaluated independently against the SAME starting position (a
-lookahead/backreference-style extraction that does not advance the input)
-before splicing in the consumed substrings as literal values.
-`CallByValueSeq` and the separate `MacroExpander`-based higher-order/lambda
-layer remain out of scope — see docs/roadmap.md.
+Formalizes all three of kmizu/macro_peg's `Evaluator` strategies (M-PEG-2
+adds `CallByValuePar`, M-PEG-3 adds `CallByValueSeq`, to M-PEG's
+`CallByName`; see `Strategy` below and `MacroPeg/Semantics.lean`'s module
+docstring for the `.call` semantics each one gets): PEG extended with
+parametrized, recursive rules. Under `CallByName` the actual parameters are
+spliced into the callee's body as UNEVALUATED expressions (true macro
+substitution); under `CallByValuePar` they are evaluated independently
+against the SAME starting position (a lookahead/backreference-style
+extraction that does not advance the input) before splicing in the consumed
+substrings as literal values; under `CallByValueSeq` they are evaluated
+SEQUENTIALLY, each argument against the input remaining after the previous
+one matched (exactly like a PEG sequence of the argument expressions),
+splicing in each consumed substring as a literal value, and the callee body
+is then derived from whatever input remains AFTER all arguments have been
+threaded through — contrast `CallByValuePar`, whose body starts from the
+ORIGINAL un-threaded input. The separate `MacroExpander`-based
+higher-order/lambda layer remains out of scope — see docs/roadmap.md.
 
 Design, continuing `Shallot.Peg`'s conventions (`Shallot/Peg/Syntax.lean`):
 - rules are `Nat`-indexed (`MGrammar.rules : List MRule`), never named — no
@@ -44,13 +50,16 @@ Design, continuing `Shallot.Peg`'s conventions (`Shallot/Peg/Syntax.lean`):
 namespace Shallot.MacroPeg
 
 /-- Which of `Evaluator`'s argument-passing strategies a derivation/run is
-under. `callByValueSeq` (sequential input-threading evaluation of actual
-parameters) is not yet formalized — a future milestone, see
-docs/roadmap.md — so it has no constructor here (an unhandled case is worse
-than a missing one). -/
+under. `callByValueSeq` evaluates actual parameters SEQUENTIALLY, threading
+the input through them (the first against the original input, the next
+against whatever remains after it matched, and so on) and derives the callee
+body from the FINAL threaded position — contrast `callByValuePar`, which
+evaluates every argument against the SAME original input and derives the
+body from that un-threaded input. -/
 inductive Strategy where
   | callByName
   | callByValuePar
+  | callByValueSeq
   deriving DecidableEq
 
 inductive MExp where

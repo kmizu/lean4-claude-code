@@ -1,20 +1,31 @@
 import MacroPeg.Semantics
 
 /-!
-# T2 — determinism of the macro-PEG derivation relation (call-by-name + call-by-value-par)
+# T2 — determinism of the macro-PEG derivation relation (call-by-name + call-by-value-par + call-by-value-seq)
 
 `MDerives g s e x o₁ → MDerives g s e x o₂ → o₁ = o₂`. Since `MOutcome.ok`
 carries the parse tree, this gives parse-tree uniqueness for free.
 
 ## Why a combined recursor
 
-`MDerives` is now `mutual` with `DerivesArgsPar` (see `MacroPeg/Semantics.lean`),
-so `induction h₁ generalizing o₂` is rejected ("the induction tactic does not
-support ... mutually inductive"). The fix is the explicit combined recursor
-`MDerives.rec` with a real second motive — exactly the template in
-`MacroPeg/Props.lean`, but here `motive_2` must be non-trivial: determinism of
-`.call` under `.callByValuePar` needs determinism of `DerivesArgsPar` itself,
-which can only be proved AS PART of the same mutual induction.
+`MDerives` is now `mutual` with `DerivesArgsPar` AND `DerivesArgsSeq` (see
+`MacroPeg/Semantics.lean`), so `induction h₁ generalizing o₂` is rejected ("the
+induction tactic does not support ... mutually inductive"). The fix is the
+explicit combined recursor `MDerives.rec` with real second and third motives —
+exactly the template in `MacroPeg/Props.lean`, but here `motive_2`/`motive_3`
+must be non-trivial: determinism of `.call` under `.callByValuePar` needs
+determinism of `DerivesArgsPar`, and determinism under `.callByValueSeq` needs
+determinism of `DerivesArgsSeq`, each provable only AS PART of the same mutual
+induction.
+
+Because `DerivesArgsPar` and `DerivesArgsSeq` share the constructor names
+`nil`/`cons`, `induction ... with | nil => ...` cannot name both pairs (Lean
+rejects "Duplicate alternative name"), so — like `MacroPeg/Props.lean` — this
+proof is written with `case ...` blocks, which disambiguate the colliding tags
+by goal order: the `motive_2`/Par `nil`/`cons` goals come first, then the
+`motive_3`/Seq `nil`/`cons` goals.
+
+## `motive_2` (DerivesArgsPar)
 
 `motive_2` is a CONJUNCTION carrying the two facts about a successful
 `DerivesArgsPar g s input args vals` derivation that the `.callByValuePar`
@@ -27,11 +38,37 @@ which can only be proved AS PART of the same mutual induction.
    `input` is `.ok` (needed to refute `callParOk`/`callParFail` against a
    `callParArgFail` that claims some argument failed).
 
-Both are provable in the mutual `cons` case using the motive_1 IH of the head
-sub-derivation (determinism of `a`) and the motive_2 IH of the tail. The
-symmetric refutation (`callParArgFail` as the FIRST derivation, against a
-`callParOk` whose `hargs'` has no IH) instead uses the standalone
-`derivesArgsPar_mem_ok` below together with `callParArgFail`'s own motive_1 IH.
+The symmetric refutation (`callParArgFail` as the FIRST derivation, against a
+`callParOk` whose `hargs'` has no IH) uses the standalone `derivesArgsPar_mem_ok`
+below together with `callParArgFail`'s own motive_1 IH.
+
+## `motive_3` (DerivesArgsSeq)
+
+`DerivesArgsSeq` THREADS the input, so its determinism conjunction is subtly
+different from `motive_2`:
+
+1. **value-list AND final-position uniqueness** — two derivations
+   `DerivesArgsSeq g s input args _ _` force the SAME `vals` and the SAME
+   threaded `mid` (both are needed to line up `callSeqOk` vs `callSeqOk`, where
+   the body is derived from `MExp.subst vals r.body` starting at `mid`);
+2. **split-success at the threaded position** — for every split
+   `args = pre ++ badArg :: post` and every witnessed threading
+   `DerivesArgsSeq g s input pre _ mid'` of the prefix, every outcome of `badArg`
+   at `mid'` (the position the prefix threads to) is `.ok`. Unlike `motive_2`'s
+   membership phrasing, this must pin the POSITION each element is evaluated at:
+   under call-by-value-seq the k-th argument runs at the input remaining after
+   the first k−1 were threaded, not at the original `input`. This conjunct
+   refutes `callSeqOk`/`callSeqFail` against a `callSeqArgFail` claiming some
+   argument fails at its threaded position.
+
+The symmetric refutation (`callSeqArgFail` as the FIRST derivation, against a
+`callSeqOk`/`callSeqFail` whose `hargs'` has no IH) uses the standalone
+`derivesArgsSeq_split_ok` below (a position-threaded analogue of
+`derivesArgsPar_mem_ok`: it splits the full-list derivation into a prefix
+derivation and `badArg`'s success at the prefix's threaded position) together
+with `callSeqArgFail`'s own motive_3 IH `ihpre.1` (prefix-position uniqueness,
+to identify that threaded position with the `mid` where `hfail` lives) and
+motive_1 IH `ih` (determinism of `badArg` at `mid`).
 
 ## Proof style for the shared cases
 
@@ -68,6 +105,35 @@ theorem derivesArgsPar_mem_ok {g : MGrammar} {s : Strategy} {input : List Char} 
       | head => exact ⟨t, rest, h1⟩
       | tail _ hmem => exact ih h2 hmem
 
+/-- Position-threaded analogue of `derivesArgsPar_mem_ok` for `DerivesArgsSeq`.
+Given a successful sequential threading of the WHOLE list
+`pre ++ badArg :: post`, it exposes the prefix's own threading
+`DerivesArgsSeq g s input pre preVals mid` and `badArg`'s SUCCESS at that
+threaded position `mid`. Structural (no determinism): induction on `pre`, each
+`cons` step reads off the stored head success and recurses on the threaded
+tail. Used for the `callSeqArgFail`-as-first-derivation refutation, where the
+`callSeqOk`/`callSeqFail` `h₂` supplies the full-list threading but carries no
+IH of its own. -/
+theorem derivesArgsSeq_split_ok {g : MGrammar} {s : Strategy} {badArg : MExp} {post : List MExp} :
+    ∀ {pre : List MExp} {input : List Char} {vals : List MExp} {final : List Char},
+      DerivesArgsSeq g s input (pre ++ badArg :: post) vals final →
+      ∃ preVals mid, DerivesArgsSeq g s input pre preVals mid ∧
+        ∃ t r, MDerives g s badArg mid (.ok t r) := by
+  intro pre
+  induction pre with
+  | nil =>
+    intro input vals final h
+    cases h with
+    | cons a' as' inp' p' rest' fin' t' vs' h1' hp' h2' =>
+      exact ⟨[], input, DerivesArgsSeq.nil input, t', rest', h1'⟩
+  | cons c pre' ih =>
+    intro input vals final h
+    cases h with
+    | cons a' as' inp' p' rest' fin' t' vs' h1' hp' h2' =>
+      obtain ⟨preVals', mid, hpd, t0, r0, hbad⟩ := ih h2'
+      exact ⟨MExp.lit p' :: preVals', mid,
+        DerivesArgsSeq.cons c pre' input p' rest' mid t' preVals' h1' hp' hpd, t0, r0, hbad⟩
+
 theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o₁ o₂ : MOutcome}
     (h₁ : MDerives g s e x o₁) (h₂ : MDerives g s e x o₂) : o₁ = o₂ := by
   revert h₂
@@ -75,48 +141,53 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     (motive_2 := fun input args vals _ =>
       (∀ vals₂, DerivesArgsPar g s input args vals₂ → vals = vals₂) ∧
       (∀ a, a ∈ args → ∀ o, MDerives g s a input o → ∃ t r, o = MOutcome.ok t r))
-    generalizing o₂ with
-  | eps input =>
+    (motive_3 := fun input args vals mid _ =>
+      (∀ vals₂ mid₂, DerivesArgsSeq g s input args vals₂ mid₂ → vals = vals₂ ∧ mid = mid₂) ∧
+      (∀ pre badArg post preVals mid', args = pre ++ badArg :: post →
+        DerivesArgsSeq g s input pre preVals mid' →
+        ∀ o, MDerives g s badArg mid' o → ∃ t r, o = MOutcome.ok t r))
+    generalizing o₂
+  case eps input =>
     intro h₂
     cases h₂
     rfl
-  | anyOk c rest =>
+  case anyOk c rest =>
     intro h₂
     cases h₂
     rfl
-  | anyFail =>
+  case anyFail =>
     intro h₂
     cases h₂
     rfl
-  | chrOk c d rest hcd =>
+  case chrOk c d rest hcd =>
     intro h₂
     cases h₂ with
     | chrOk _ _ _ _ => rfl
     | chrFail _ _ _ h' => rw [hcd] at h'; exact Bool.noConfusion h'
-  | chrFail c d rest hcd =>
+  case chrFail c d rest hcd =>
     intro h₂
     cases h₂ with
     | chrOk _ _ _ h' => rw [hcd] at h'; exact Bool.noConfusion h'
     | chrFail _ _ _ _ => rfl
-  | chrEmpty c =>
+  case chrEmpty c =>
     intro h₂
     cases h₂
     rfl
-  | rangeOk lo hi d rest hcond =>
+  case rangeOk lo hi d rest hcond =>
     intro h₂
     cases h₂ with
     | rangeOk _ _ _ _ _ => rfl
     | rangeFail _ _ _ _ h' => rw [hcond] at h'; exact Bool.noConfusion h'
-  | rangeFail lo hi d rest hcond =>
+  case rangeFail lo hi d rest hcond =>
     intro h₂
     cases h₂ with
     | rangeOk _ _ _ _ h' => rw [hcond] at h'; exact Bool.noConfusion h'
     | rangeFail _ _ _ _ _ => rfl
-  | rangeEmpty lo hi =>
+  case rangeEmpty lo hi =>
     intro h₂
     cases h₂
     rfl
-  | litOk str input rest hs =>
+  case litOk str input rest hs =>
     intro h₂
     cases h₂ with
     | litOk _ _ rest' h' =>
@@ -127,22 +198,22 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     | litFail _ _ h' =>
       rw [hs] at h'
       injection h'
-  | litFail str input hs =>
+  case litFail str input hs =>
     intro h₂
     cases h₂ with
     | litOk _ _ rest' h' =>
       rw [hs] at h'
       injection h'
     | litFail _ _ _ => rfl
-  | dbg e input =>
+  case dbg e input =>
     intro h₂
     cases h₂ with
     | dbg _ _ => rfl
-  | paramFail k input =>
+  case paramFail k input =>
     intro h₂
     cases h₂ with
     | paramFail _ _ => rfl
-  | callNameOk i args r input rest t hs hr ha hd ih =>
+  case callNameOk i args r input rest t hs hr ha hd ih =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -166,6 +237,12 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       exact absurd (hs.symm.trans hs') (by decide)
     | callParArgFail _ _ _ _ _ _ _ hs' _ _ _ _ =>
       exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqFail _ _ r' _ mid' vals' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqArgFail _ _ _ _ _ _ _ _ hs' _ _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
     | callMissing _ _ _ hr' =>
       rw [hr] at hr'
       injection hr'
@@ -174,7 +251,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       injection hr' with he
       subst he
       exact absurd ha ha'
-  | callNameFail i args r input hs hr ha hd ih =>
+  case callNameFail i args r input hs hr ha hd ih =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -188,9 +265,13 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       exact absurd (hs.symm.trans hs') (by decide)
     | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
     | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
     | callMissing _ _ _ hr' => rfl
     | callArity _ _ r' _ hr' ha' => rfl
-  | callParOk i args r input rest vals t hs hr ha hargs hd ihargs ih =>
+  case callParOk i args r input rest vals t hs hr ha hargs hd ihargs ih =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -220,6 +301,12 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       have hmem2 : badArg ∈ pre ++ badArg :: post := by simp
       obtain ⟨t0, r0, hc⟩ := ihargs.2 badArg hmem2 .fail hfail'
       injection hc
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqFail _ _ r' _ mid' vals' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqArgFail _ _ _ _ _ _ _ _ hs' _ _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
     | callMissing _ _ _ hr' =>
       rw [hr] at hr'
       injection hr'
@@ -228,7 +315,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       injection hr' with he
       subst he
       exact absurd ha ha'
-  | callParFail i args r input vals hs hr ha hargs hd ihargs ih =>
+  case callParFail i args r input vals hs hr ha hargs hd ihargs ih =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -244,9 +331,13 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       injection h3
     | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
     | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
     | callMissing _ _ _ hr' => rfl
     | callArity _ _ r' _ hr' ha' => rfl
-  | callParArgFail i pre badArg post r input preVals hs hr ha hpre hfail ihpre ih =>
+  case callParArgFail i pre badArg post r input preVals hs hr ha hpre hfail ihpre ih =>
     intro h₂
     -- `.call`'s argument list is the structured `pre ++ badArg :: post`, on
     -- which `cases h₂` cannot solve the append-index equation for the
@@ -265,9 +356,105 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       injection h3
     | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
     | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
     | callMissing _ _ _ hr' => rfl
     | callArity _ _ r' _ hr' ha' => rfl
-  | callMissing i args input hr =>
+  case callSeqOk i args r input mid rest vals t hs hr ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callNameFail _ _ r' _ hs' hr' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callParOk _ _ r' _ rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callParArgFail _ _ _ _ _ _ _ hs' _ _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      rw [hr] at hr'
+      injection hr' with he
+      subst he
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3 with ht hrest
+      subst ht
+      subst hrest
+      rfl
+    | callSeqFail _ _ r' _ mid' vals' hs' hr' ha' hargs' hd' =>
+      rw [hr] at hr'
+      injection hr' with he
+      subst he
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3
+    | callSeqArgFail _ pre badArg post r' _ mid' preVals hs' hr' ha' hpre' hfail' =>
+      obtain ⟨t0, r0, hc⟩ := ihargs.2 pre badArg post preVals mid' rfl hpre' MOutcome.fail hfail'
+      injection hc
+    | callMissing _ _ _ hr' =>
+      rw [hr] at hr'
+      injection hr'
+    | callArity _ _ r' _ hr' ha' =>
+      rw [hr] at hr'
+      injection hr' with he
+      subst he
+      exact absurd ha ha'
+  case callSeqFail i args r input mid vals hs hr ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callNameFail _ _ r' _ hs' hr' ha' hd' => rfl
+    | callParOk _ _ r' _ rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
+    | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      rw [hr] at hr'
+      injection hr' with he
+      subst he
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callMissing _ _ _ hr' => rfl
+    | callArity _ _ r' _ hr' ha' => rfl
+  case callSeqArgFail i pre badArg post r input mid preVals hs hr ha hpre hfail ihpre ih =>
+    intro h₂
+    -- Same append-index obstruction as `callParArgFail`: generalize the
+    -- structured argument list to a variable before dependent elimination.
+    generalize hargeq : pre ++ badArg :: post = args at h₂
+    cases h₂ with
+    | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callNameFail _ _ r' _ hs' hr' ha' hd' => rfl
+    | callParOk _ _ r' _ rest' vals' t' hs' hr' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
+    | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid'' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      rw [← hargeq] at hargs'
+      obtain ⟨preVals', mid', hpd, t0, r0, hbad⟩ := derivesArgsSeq_split_ok hargs'
+      obtain ⟨_, hmeq⟩ := ihpre.1 preVals' mid' hpd
+      subst hmeq
+      have h3 := ih hbad
+      injection h3
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callMissing _ _ _ hr' => rfl
+    | callArity _ _ r' _ hr' ha' => rfl
+  case callMissing i args input hr =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -279,9 +466,14 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       injection hr'
     | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
     | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      rw [hr] at hr'
+      injection hr'
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
     | callMissing _ _ _ hr' => rfl
     | callArity _ _ r' _ hr' ha' => rfl
-  | callArity i args r input hr ha =>
+  case callArity i args r input hr ha =>
     intro h₂
     cases h₂ with
     | callNameOk _ _ r' _ rest' t' hs' hr' ha' hd' =>
@@ -297,9 +489,16 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       exact absurd ha' ha
     | callParFail _ _ r' _ vals' hs' hr' ha' hargs' hd' => rfl
     | callParArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqOk _ _ r' _ mid' rest' vals' t' hs' hr' ha' hargs' hd' =>
+      rw [hr] at hr'
+      injection hr' with he
+      subst he
+      exact absurd ha' ha
+    | callSeqFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | callSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
     | callMissing _ _ _ hr' => rfl
     | callArity _ _ r' _ hr' ha' => rfl
-  | seqOk e₁ e₂ input rest₁ rest₂ t₁ t₂ hd₁ hd₂ ih₁ ih₂ =>
+  case seqOk e₁ e₂ input rest₁ rest₂ t₁ t₂ hd₁ hd₂ ih₁ ih₂ =>
     intro h₂
     cases h₂ with
     | seqOk _ _ _ rest₁' rest₂' t₁' t₂' hd₁' hd₂' =>
@@ -322,7 +521,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       subst hrest
       have h4 := ih₂ hd₂'
       injection h4
-  | seqFail₁ e₁ e₂ input hd₁ ih₁ =>
+  case seqFail₁ e₁ e₂ input hd₁ ih₁ =>
     intro h₂
     cases h₂ with
     | seqOk _ _ _ rest₁' rest₂' t₁' t₂' hd₁' hd₂' =>
@@ -332,7 +531,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     | seqFail₂ _ _ _ rest₁' t₁' hd₁' hd₂' =>
       have h3 := ih₁ hd₁'
       injection h3
-  | seqFail₂ e₁ e₂ input rest₁ t₁ hd₁ hd₂ ih₁ ih₂ =>
+  case seqFail₂ e₁ e₂ input rest₁ t₁ hd₁ hd₂ ih₁ ih₂ =>
     intro h₂
     cases h₂ with
     | seqOk _ _ _ rest₁' rest₂' t₁' t₂' hd₁' hd₂' =>
@@ -346,7 +545,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       have h3 := ih₁ hd₁'
       injection h3
     | seqFail₂ _ _ _ rest₁' t₁' hd₁' hd₂' => rfl
-  | altL e₁ e₂ input rest t hd ih =>
+  case altL e₁ e₂ input rest t hd ih =>
     intro h₂
     cases h₂ with
     | altL _ _ _ rest' t' hd' =>
@@ -361,7 +560,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     | altFail _ _ _ hf₁' hf₂' =>
       have h3 := ih hf₁'
       injection h3
-  | altR e₁ e₂ input rest t hf hok ihf ihok =>
+  case altR e₁ e₂ input rest t hf hok ihf ihok =>
     intro h₂
     cases h₂ with
     | altL _ _ _ rest' t' hd' =>
@@ -376,7 +575,7 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     | altFail _ _ _ hf₁' hf₂' =>
       have h3 := ihok hf₂'
       injection h3
-  | altFail e₁ e₂ input hf₁ hf₂ ih₁ ih₂ =>
+  case altFail e₁ e₂ input hf₁ hf₂ ih₁ ih₂ =>
     intro h₂
     cases h₂ with
     | altL _ _ _ rest' t' hd' =>
@@ -386,14 +585,14 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       have h3 := ih₂ hok'
       injection h3
     | altFail _ _ _ _ _ => rfl
-  | starNil e input hf ih =>
+  case starNil e input hf ih =>
     intro h₂
     cases h₂ with
     | starNil _ _ _ => rfl
     | starCons _ _ rest₁' rest₂' t' ts' hd₁' hd₂' =>
       have h3 := ih hd₁'
       injection h3
-  | starCons e input rest rest' t ts hd₁ hd₂ ih₁ ih₂ =>
+  case starCons e input rest rest' t ts hd₁ hd₂ ih₁ ih₂ =>
     intro h₂
     cases h₂ with
     | starNil _ _ hf' =>
@@ -409,28 +608,30 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       subst hts
       subst hrest'
       rfl
-  | notOk e input rest t hd ih =>
+  case notOk e input rest t hd ih =>
     intro h₂
     cases h₂ with
     | notOk _ _ rest' t' hd' => rfl
     | notFail _ _ hf' =>
       have h3 := ih hf'
       injection h3
-  | notFail e input hf ih =>
+  case notFail e input hf ih =>
     intro h₂
     cases h₂ with
     | notOk _ _ rest' t' hd' =>
       have h3 := ih hd'
       injection h3
     | notFail _ _ _ => rfl
-  | nil input =>
+  -- `DerivesArgsPar` nil/cons (`motive_2`) first, then `DerivesArgsSeq` nil/cons
+  -- (`motive_3`); the repeated `case` tags disambiguate by goal order.
+  case nil input =>
     refine ⟨?_, ?_⟩
     · intro vals₂ h
       cases h
       rfl
     · intro a ha
       cases ha
-  | cons a as input p rest t vs h1 hp h2 ih1 ih2 =>
+  case cons a as input p rest t vs h1 hp h2 ih1 ih2 =>
     refine ⟨?_, ?_⟩
     · intro vals₂ h
       cases h with
@@ -446,5 +647,44 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
       cases ha0 with
       | head => intro o hd0; exact ⟨t, rest, (ih1 hd0).symm⟩
       | tail _ hmem => exact ih2.2 a0 hmem
+  case nil input =>
+    refine ⟨?_, ?_⟩
+    · intro vals₂ mid₂ h
+      cases h with
+      | nil => exact ⟨rfl, rfl⟩
+    · intro pre badArg' post preVals mid' heq hpre o hd
+      cases pre <;> simp at heq
+  case cons a as input p rest final t vs h1 hp h2 ih1 =>
+    intro ih2
+    refine ⟨?_, ?_⟩
+    · intro vals₂ mid₂ h
+      cases h with
+      | cons a' as' input' p' rest' final' t' vs' h1' hp' h2' =>
+        have h3 := ih1 h1'
+        injection h3 with _ hrest
+        subst hrest
+        obtain ⟨hvv, hmm⟩ := ih2.1 _ _ h2'
+        have hpp : p ++ rest = p' ++ rest := by rw [← hp, ← hp']
+        have hpeq := List.append_cancel_right hpp
+        subst hpeq
+        subst hvv
+        exact ⟨rfl, hmm⟩
+    · intro pre badArg' post preVals mid' heq hpre o hd
+      cases pre with
+      | nil =>
+        injection heq with hba has
+        cases hpre with
+        | nil =>
+          subst hba
+          exact ⟨t, rest, (ih1 hd).symm⟩
+      | cons c pre' =>
+        injection heq with hac has
+        cases hpre with
+        | cons ca cas cinp cp crest cfin ct cvs ch1 chp ch2 =>
+          subst hac
+          have h3 := ih1 ch1
+          injection h3 with _ hcr
+          subst hcr
+          exact ih2.2 pre' badArg' post cvs mid' has ch2 o hd
 
 end Shallot.MacroPeg

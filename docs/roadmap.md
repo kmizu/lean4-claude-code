@@ -18,25 +18,22 @@
 | M11 | 具象構文＋roundtrip RT-L1〜L3＋合成定理＋docs | フルコーパス・docs完 | ✅ 完了（RT-L1 594行＋RT-L2 1705行＋RT-L3 1471行。pipeline_correct=全部の合成。sepOkB境界条件をroundtrip証明が発見） |
 | M-PEG | kmizu/macro_peg の call-by-name 意味論を独立モジュール `MacroPeg/` として形式化（T0-T3＋headline定理）＋Lens抽出＋差分ハーネス | 監査green・`copy_language_ww` 全称量化・Lens抽出＋差分ハーネスgreen | ✅ 完了（T0-T3の5定理＋headline `copy_language_ww`、sorryゼロ。Lens抽出＋差分ハーネスもgreen、8ケース） |
 | M-PEG-2 | `MacroPeg/` に `Strategy`（`.callByName`/`.callByValuePar`）を追加し `MDerives`/`mpegRun` を retrofit。`CallByValuePar`（実引数を同一位置で独立評価）を形式化 | 既存8ケース無退行・T0-T3再証明green・Lens抽出＋差分ハーネス拡張green | ✅ 完了（`DerivesArgsPar`/`evalArgsPar` の mutual 拡張、T0-T3 retrofit、`callParArgFail` の設計バグを完全性証明の過程で発見・修正——`args = pre ++ badArg :: post` ＋ `pre` 成功の明示証拠が必要だった。Par版スモークテスト3ケース追加、既存8ケース無退行、`make verify` フルグリーン） |
+| M-PEG-3 | `MacroPeg/` に `Strategy.callByValueSeq` を追加し `MDerives`/`mpegRun` を retrofit。`CallByValueSeq`（実引数を左から逐次評価し入力位置をスレッディング、規則本体は最終位置から）を形式化 | 既存11ケース無退行・T0-T3再証明green・Lens抽出＋差分ハーネス拡張green | ✅ 完了（`DerivesArgsSeq`/`evalArgsSeq` の mutual 拡張、T0-T3 retrofit。`callSeqArgFail` は M-PEG-2 の `callParArgFail` バグの教訓を先回りで反映し設計段階から健全。P1 (`mderives_suffix`) は `callSeqOk` が最終スレッディング位置 `mid` から本体を導出するため `motive_3` を `∃ q, input = q ++ final` という非自明な述語にする必要があった。Seq版スモークテスト3ケース追加、既存11ケース無退行、`make verify` フルグリーン——三戦略すべて形式化完了） |
 
 ## 未証明TODO（sorryの代わりにここに置く）
 
 （なし — 定理はここから「証明済み」へしか動かない）
 
-## Macro PEG（M-PEG / M-PEG-2）: 今回スコープ外にしたもの
+## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3）: 今回スコープ外にしたもの
 
 kmizu/macro_peg の README/Scala実装を精読した上での意図的な絞り込み（詳細は
-`docs/theorems.md` の Macro PEG 節）：
+`docs/theorems.md` の Macro PEG 節）。macro_peg の三戦略（`CallByName`/
+`CallByValuePar`/`CallByValueSeq`）はすべて形式化済み。残るスコープ外は：
 
-- **`CallByValueSeq` 戦略**: `MDerives`/`mpegRun` は `.callByName`/
-  `.callByValuePar` の2戦略のみ対象（M-PEG-2 で Par を追加）。`CallByValueSeq`
-  は実引数を入力消費しながら**逐次**（Par の「同一位置で独立」とは異なり
-  スレッディングする）事前評価する別物の意味論で、`DerivesArgsPar` と並行する
-  新しい補助関係が必要——将来のマイルストーンとして切り出す
 - **高階関数レイヤー**（ラムダ `(x -> e)`・カリー化・第一級関数値）: 参照実装でも
   Evaluator のネイティブ機能ではなく、別ユーティリティ `MacroExpander` による
   「呼び出し前に全展開する」非停止性リスクのある構文的インライン化パス経由でしか
   動かない（再帰マクロには使えない）。今回は「データ値としての式パラメータを取る
   再帰マクロ」のみを対象とした
 - **解説ガイド新章**（`docs/guide/08-macro-peg.md` は M-PEG 時点の内容のまま。
-  `CallByValuePar` 追加分の追記は独立の作業として提案する）
+  `CallByValuePar`/`CallByValueSeq` 追加分の追記は独立の作業として提案する）

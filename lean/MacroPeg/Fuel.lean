@@ -1,7 +1,7 @@
 import MacroPeg.Interp
 
 /-!
-# T0 — fuel monotonicity (Macro PEG, call-by-name + call-by-value-par)
+# T0 — fuel monotonicity (Macro PEG, call-by-name + call-by-value-par + call-by-value-seq)
 
 `mpegRun g s f e x = some o → mpegRun g s (f+1) e x = some o`, plus the `≤`
 corollary. The `.callByValuePar` case of `.call` needs a companion fact
@@ -20,6 +20,14 @@ fuel `f+1`, from unfolding `mpegRun` at `f+2`). So the two lemmas compose
 in strictly one direction: prove `evalArgsPar_mono_of_mpegRun_mono` first
 (ordinary list induction, `mpegRun`-mono taken as a parameter), then use it
 as a black box inside `mpegRun_mono`'s own fuel induction.
+
+The `.callByValueSeq` case is structurally identical, with its own companion
+`evalArgsSeq_mono_of_mpegRun_mono`. The sole twist: `evalArgsSeq`'s `cons`
+recurses on the THREADED remainder `rest` as the tail's input (not the fixed
+`input` that `evalArgsPar` keeps), so its list induction must GENERALIZE over
+the input position; otherwise `ih` would be pinned to the original `input`
+and useless at `rest`. It is still ordinary list induction taking
+`mpegRun`-mono at a fixed level as a parameter — no fuel/mutual induction.
 
 Proof-engineering note (same discipline as the M-PEG `pegRun`/`mpegRun`
 proofs before it): `simp only [mpegRun]`/`simp only [evalArgsPar]` must NOT
@@ -55,6 +63,42 @@ theorem evalArgsPar_mono_of_mpegRun_mono {g : MGrammar} {s : Strategy} {f : Nat}
       | ok t rest =>
         dsimp only at h ⊢
         cases h2 : evalArgsPar g s f input as with
+        | none => rw [h2] at h; exact absurd h (by simp)
+        | some o2 =>
+          rw [h2] at h
+          rw [ih h2]
+          exact h
+
+/-- If `mpegRun` is monotonic at fuel level `f` (the exact fact `mpegRun_mono`'s
+own induction hands you as `ih`), then so is `evalArgsSeq` at that same level.
+Parallel to `evalArgsPar_mono_of_mpegRun_mono`, but because `evalArgsSeq`'s
+`cons` case recurses with the THREADED remainder `rest` as the tail's input
+(not the fixed `input` that `evalArgsPar` keeps), the list induction must
+GENERALIZE over the input position — otherwise `ih` would be pinned to the
+original `input` and useless at `rest`. Still plain structural induction on the
+argument list, `mpegRun`-mono taken as a parameter; no fuel induction. -/
+theorem evalArgsSeq_mono_of_mpegRun_mono {g : MGrammar} {s : Strategy} {f : Nat}
+    (hM : ∀ {e : MExp} {x : List Char} {o : MOutcome},
+      mpegRun g s f e x = some o → mpegRun g s (f + 1) e x = some o) :
+    ∀ {input : List Char} {args : List MExp} {r : Option (List MExp × List Char)},
+      evalArgsSeq g s f input args = some r → evalArgsSeq g s (f + 1) input args = some r := by
+  intro input args
+  induction args generalizing input with
+  | nil => intro r h; simp only [evalArgsSeq] at h ⊢; exact h
+  | cons a as ih =>
+    intro r h
+    rw [evalArgsSeq.eq_def] at h ⊢
+    dsimp only at h ⊢
+    cases h1 : mpegRun g s f a input with
+    | none => rw [h1] at h; exact absurd h (by simp)
+    | some o1 =>
+      rw [h1] at h
+      rw [hM h1]
+      cases o1 with
+      | fail => exact h
+      | ok t rest =>
+        dsimp only at h ⊢
+        cases h2 : evalArgsSeq g s f rest as with
         | none => rw [h2] at h; exact absurd h (by simp)
         | some o2 =>
           rw [h2] at h
@@ -122,6 +166,25 @@ theorem mpegRun_mono {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : Lis
                   rw [h2] at h
                   rw [ih h2]
                   exact h
+          | callByValueSeq =>
+            dsimp only at h ⊢
+            cases h1 : evalArgsSeq g .callByValueSeq f x args with
+            | none => rw [h1] at h; exact absurd h (by simp)
+            | some o1 =>
+              rw [h1] at h
+              rw [evalArgsSeq_mono_of_mpegRun_mono (@ih) h1]
+              cases o1 with
+              | none => exact h
+              | some p =>
+                cases p with
+                | mk vals mid =>
+                  dsimp only at h ⊢
+                  cases h2 : mpegRun g .callByValueSeq f (MExp.subst vals r.body) mid with
+                  | none => rw [h2] at h; exact absurd h (by simp)
+                  | some o2 =>
+                    rw [h2] at h
+                    rw [ih h2]
+                    exact h
         · simp only [if_neg hbeq] at h ⊢
           exact h
     | seq e₁ e₂ =>

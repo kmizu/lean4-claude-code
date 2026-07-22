@@ -64,6 +64,32 @@ theorem evalArgsPar_mono_le {g : MGrammar} {s : Strategy} {f f' : Nat} {input : 
   | refl => exact h
   | step _ ih => exact evalArgsPar_mono ih
 
+/-! ## Reusable fuel-monotonicity for `evalArgsSeq`
+
+Exact `evalArgsSeq` analogues of `evalArgsPar_mono`/`evalArgsPar_mono_le`
+above, derived from `evalArgsSeq_mono_of_mpegRun_mono` (`Fuel.lean`, the
+mono-at-a-fixed-level fact) composed with `mpegRun_mono`. Same one-directional
+composition; the only difference is the result type carries the threaded
+remainder (`Option (List MExp × List Char)` rather than `Option (List
+MExp)`). -/
+
+theorem evalArgsSeq_mono {g : MGrammar} {s : Strategy} {f : Nat} {input : List Char}
+    {args : List MExp} {r : Option (List MExp × List Char)}
+    (h : evalArgsSeq g s f input args = some r) :
+    evalArgsSeq g s (f + 1) input args = some r := by
+  have hM : ∀ {e : MExp} {x : List Char} {o : MOutcome},
+      mpegRun g s f e x = some o → mpegRun g s (f + 1) e x = some o :=
+    fun hh => mpegRun_mono hh
+  exact evalArgsSeq_mono_of_mpegRun_mono hM h
+
+theorem evalArgsSeq_mono_le {g : MGrammar} {s : Strategy} {f f' : Nat} {input : List Char}
+    {args : List MExp} {r : Option (List MExp × List Char)}
+    (hle : f ≤ f') (h : evalArgsSeq g s f input args = some r) :
+    evalArgsSeq g s f' input args = some r := by
+  induction hle with
+  | refl => exact h
+  | step _ ih => exact evalArgsSeq_mono ih
+
 /-! ## Prefix helper (local copies of `Soundness.lean`'s facts, kept
 file-private to avoid depending on the soundness module and to avoid name
 clashes). -/
@@ -124,25 +150,72 @@ theorem evalArgsPar_pre_succ_then_argFail {g : MGrammar} {s : Strategy} {f : Nat
             have hind := ih h2
             simp only [List.cons_append, evalArgsPar, h1, hind]
 
+/-- Sequential analogue of `evalArgsPar_pre_succ_then_argFail`, the exact
+template for the `callSeqArgFail` case. If every element of `pre` succeeds
+IN SEQUENCE (witnessed by `evalArgsSeq` reaching a full success on `pre` at
+fuel `f`, THREADING `input` to `mid`) and `badArg` fails at that threaded
+position `mid`, then `evalArgsSeq` on `pre ++ badArg :: post` (any `post`)
+returns `some none` at `f` too: it threads through `pre` exactly as the
+witness says, arrives at `mid`, hits `badArg`, and short-circuits, never
+looking at `post`. The induction generalizes over `input` and `preVals`
+(both change as we peel off each argument and re-thread the tail), while
+`mid` stays fixed as the position the WHOLE prefix threads to; `badArg`'s
+failure lives at that fixed `mid`. -/
+theorem evalArgsSeq_pre_succ_then_argFail {g : MGrammar} {s : Strategy} {f : Nat}
+    {mid : List Char}
+    (pre : List MExp) (badArg : MExp) (post : List MExp) :
+    ∀ {input : List Char} {preVals : List MExp},
+      evalArgsSeq g s f input pre = some (some (preVals, mid)) →
+      mpegRun g s f badArg mid = some .fail →
+      evalArgsSeq g s f input (pre ++ badArg :: post) = some none := by
+  induction pre with
+  | nil =>
+    intro input preVals hpre hbad
+    simp only [evalArgsSeq, Option.some.injEq, Prod.mk.injEq] at hpre
+    obtain ⟨-, rfl⟩ := hpre
+    simp only [List.nil_append, evalArgsSeq, hbad]
+  | cons a as ih =>
+    intro input preVals hpre hbad
+    cases h1 : mpegRun g s f a input with
+    | none => simp [evalArgsSeq, h1] at hpre
+    | some o1 =>
+      cases o1 with
+      | fail => simp [evalArgsSeq, h1] at hpre
+      | ok t rest =>
+        cases h2 : evalArgsSeq g s f rest as with
+        | none => simp [evalArgsSeq, h1, h2] at hpre
+        | some o2 =>
+          cases o2 with
+          | none => simp [evalArgsSeq, h1, h2] at hpre
+          | some pr =>
+            cases pr with
+            | mk vs final =>
+              simp only [evalArgsSeq, h1, h2, Option.some.injEq, Prod.mk.injEq] at hpre
+              obtain ⟨-, rfl⟩ := hpre
+              have hind := ih h2 hbad
+              simp only [List.cons_append, evalArgsSeq, h1, hind]
+
 theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o : MOutcome}
     (h : MDerives g s e x o) : ∃ f, mpegRun g s f e x = some o := by
   induction h using MDerives.rec
     (motive_2 := fun input args vals _ =>
-      ∃ f, evalArgsPar g s f input args = some (some vals)) with
-  | eps input => exact ⟨1, by simp [mpegRun]⟩
-  | anyOk c rest => exact ⟨1, by simp [mpegRun]⟩
-  | anyFail => exact ⟨1, by simp [mpegRun]⟩
-  | chrOk c d rest hcd => exact ⟨1, by simp [mpegRun, hcd]⟩
-  | chrFail c d rest hcd => exact ⟨1, by simp [mpegRun, hcd]⟩
-  | chrEmpty c => exact ⟨1, by simp [mpegRun]⟩
-  | rangeOk lo hi d rest hr => exact ⟨1, by simp [mpegRun, hr]⟩
-  | rangeFail lo hi d rest hr => exact ⟨1, by simp [mpegRun, hr]⟩
-  | rangeEmpty lo hi => exact ⟨1, by simp [mpegRun]⟩
-  | litOk str input rest hs => exact ⟨1, by simp [mpegRun, hs]⟩
-  | litFail str input hs => exact ⟨1, by simp [mpegRun, hs]⟩
-  | dbg e input => exact ⟨1, by simp [mpegRun]⟩
-  | paramFail k input => exact ⟨1, by simp [mpegRun]⟩
-  | callNameOk i args r input rest t hs hr ha hd ih =>
+      ∃ f, evalArgsPar g s f input args = some (some vals))
+    (motive_3 := fun input args vals final _ =>
+      ∃ f, evalArgsSeq g s f input args = some (some (vals, final)))
+  case eps input => exact ⟨1, by simp [mpegRun]⟩
+  case anyOk c rest => exact ⟨1, by simp [mpegRun]⟩
+  case anyFail => exact ⟨1, by simp [mpegRun]⟩
+  case chrOk c d rest hcd => exact ⟨1, by simp [mpegRun, hcd]⟩
+  case chrFail c d rest hcd => exact ⟨1, by simp [mpegRun, hcd]⟩
+  case chrEmpty c => exact ⟨1, by simp [mpegRun]⟩
+  case rangeOk lo hi d rest hr => exact ⟨1, by simp [mpegRun, hr]⟩
+  case rangeFail lo hi d rest hr => exact ⟨1, by simp [mpegRun, hr]⟩
+  case rangeEmpty lo hi => exact ⟨1, by simp [mpegRun]⟩
+  case litOk str input rest hs => exact ⟨1, by simp [mpegRun, hs]⟩
+  case litFail str input hs => exact ⟨1, by simp [mpegRun, hs]⟩
+  case dbg e input => exact ⟨1, by simp [mpegRun]⟩
+  case paramFail k input => exact ⟨1, by simp [mpegRun]⟩
+  case callNameOk i args r input rest t hs hr ha hd ih =>
     subst hs
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
@@ -152,7 +225,7 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     dsimp only
     have hbeq : (r.arity == args.length) = true := by simpa using ha
     simp only [if_pos hbeq, hf]
-  | callNameFail i args r input hs hr ha hd ih =>
+  case callNameFail i args r input hs hr ha hd ih =>
     subst hs
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
@@ -162,7 +235,7 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     dsimp only
     have hbeq : (r.arity == args.length) = true := by simpa using ha
     simp only [if_pos hbeq, hf]
-  | callParOk i args r input rest vals t hs hr ha hargs hd ihargs ih =>
+  case callParOk i args r input rest vals t hs hr ha hargs hd ihargs ih =>
     subst hs
     obtain ⟨fA, hfA⟩ := ihargs
     obtain ⟨fB, hfB⟩ := ih
@@ -175,7 +248,7 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     dsimp only
     have hbeq : (r.arity == args.length) = true := by simpa using ha
     simp only [if_pos hbeq, hlA, hlB]
-  | callParFail i args r input vals hs hr ha hargs hd ihargs ih =>
+  case callParFail i args r input vals hs hr ha hargs hd ihargs ih =>
     subst hs
     obtain ⟨fA, hfA⟩ := ihargs
     obtain ⟨fB, hfB⟩ := ih
@@ -188,7 +261,7 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     dsimp only
     have hbeq : (r.arity == args.length) = true := by simpa using ha
     simp only [if_pos hbeq, hlA, hlB]
-  | callParArgFail i pre badArg post r input preVals hs hr ha hpre hfail ihpre ih =>
+  case callParArgFail i pre badArg post r input preVals hs hr ha hpre hfail ihpre ih =>
     subst hs
     obtain ⟨fA, hfA⟩ := ihpre
     obtain ⟨fB, hfB⟩ := ih
@@ -202,9 +275,49 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     dsimp only
     have hbeq : (r.arity == (pre ++ badArg :: post).length) = true := by simpa using ha
     simp only [if_pos hbeq, hnone]
-  | callMissing i args input hr => exact ⟨1, by simp [mpegRun, hr]⟩
-  | callArity i args r input hr ha => exact ⟨1, by simp [mpegRun, hr, ha]⟩
-  | seqOk e₁ e₂ input rest₁ rest₂ t₁ t₂ h₁ h₂ ih₁ ih₂ =>
+  case callSeqOk i args r input mid rest vals t hs hr ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    rw [hr]
+    dsimp only
+    have hbeq : (r.arity == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case callSeqFail i args r input mid vals hs hr ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    rw [hr]
+    dsimp only
+    have hbeq : (r.arity == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case callSeqArgFail i pre badArg post r input mid preVals hs hr ha hpre hfail ihpre ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihpre
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    have hnone := evalArgsSeq_pre_succ_then_argFail pre badArg post hlA hlB
+    rw [mpegRun.eq_def]
+    dsimp only
+    rw [hr]
+    dsimp only
+    have hbeq : (r.arity == (pre ++ badArg :: post).length) = true := by simpa using ha
+    simp only [if_pos hbeq, hnone]
+  case callMissing i args input hr => exact ⟨1, by simp [mpegRun, hr]⟩
+  case callArity i args r input hr ha => exact ⟨1, by simp [mpegRun, hr, ha]⟩
+  case seqOk e₁ e₂ input rest₁ rest₂ t₁ t₂ h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂
     refine ⟨max f₁ f₂ + 1, ?_⟩
@@ -213,13 +326,13 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hl₁, hl₂]
-  | seqFail₁ e₁ e₂ input h₁ ih =>
+  case seqFail₁ e₁ e₂ input h₁ ih =>
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hf]
-  | seqFail₂ e₁ e₂ input rest₁ t₁ h₁ h₂ ih₁ ih₂ =>
+  case seqFail₂ e₁ e₂ input rest₁ t₁ h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂
     refine ⟨max f₁ f₂ + 1, ?_⟩
@@ -228,13 +341,13 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hl₁, hl₂]
-  | altL e₁ e₂ input rest t h₁ ih =>
+  case altL e₁ e₂ input rest t h₁ ih =>
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hf]
-  | altR e₁ e₂ input rest t h₁ h₂ ih₁ ih₂ =>
+  case altR e₁ e₂ input rest t h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂
     refine ⟨max f₁ f₂ + 1, ?_⟩
@@ -243,7 +356,7 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hl₁, hl₂]
-  | altFail e₁ e₂ input h₁ h₂ ih₁ ih₂ =>
+  case altFail e₁ e₂ input h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂
     refine ⟨max f₁ f₂ + 1, ?_⟩
@@ -252,13 +365,13 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hl₁, hl₂]
-  | starNil e input h₁ ih =>
+  case starNil e input h₁ ih =>
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hf]
-  | starCons e input rest rest' t ts h₁ h₂ ih₁ ih₂ =>
+  case starCons e input rest rest' t ts h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂
     refine ⟨max f₁ f₂ + 1, ?_⟩
@@ -267,20 +380,20 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hl₁, hl₂]
-  | notOk e input rest t h₁ ih =>
+  case notOk e input rest t h₁ ih =>
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hf]
-  | notFail e input h₁ ih =>
+  case notFail e input h₁ ih =>
     obtain ⟨f, hf⟩ := ih
     refine ⟨f + 1, ?_⟩
     rw [mpegRun.eq_def]
     dsimp only
     simp only [hf]
-  | nil input => exact ⟨0, by simp [evalArgsPar]⟩
-  | cons a as input p rest t vs h1 hp h2 ih1 ih2 =>
+  case nil input => exact ⟨0, by simp [evalArgsPar]⟩
+  case cons a as input p rest t vs h1 hp h2 ih1 ih2 =>
     obtain ⟨f1, hf1⟩ := ih1
     obtain ⟨f2, hf2⟩ := ih2
     refine ⟨max f1 f2, ?_⟩
@@ -289,6 +402,31 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     have hpre : prefixBeforeSuffix input rest = p := by
       rw [hp]; exact prefixBeforeSuffix_correct_c p rest
     rw [evalArgsPar.eq_def]
+    dsimp only
+    simp only [hl1, hl2, hpre]
+  -- `DerivesArgsSeq` (motive_3) nil/cons follow the Par nil/cons above; the
+  -- repeated `case nil`/`case cons` tags disambiguate by goal order (motive_2
+  -- goals precede motive_3 goals), exactly as in `Props.lean`'s
+  -- `mderives_suffix`. Differences from Par: `evalArgsSeq` (threaded) replaces
+  -- `evalArgsPar`, and the `cons` binder list carries the extra threaded index
+  -- `final`. Crucially, because `DerivesArgsSeq.cons`'s tail premise `h2`
+  -- recurses on the THREADED remainder `rest` (a fresh index, not the fixed
+  -- `input`), the recursor presents `h2`'s motive_3 IH as the goal's antecedent
+  -- rather than an introducible binder — so we name the 12 leading binders
+  -- (11 fields + `h1`'s motive_1 IH `ih1`) and `intro ih2` to grab the tail IH,
+  -- exactly as `Props.lean`'s Seq `cons` does. (Par's tail premise recurses at
+  -- the same fixed `input`, so there BOTH IHs are introducible binders.)
+  case nil input => exact ⟨0, by simp [evalArgsSeq]⟩
+  case cons a as input p rest final t vs h1 hp h2 ih1 =>
+    intro ih2
+    obtain ⟨f1, hf1⟩ := ih1
+    obtain ⟨f2, hf2⟩ := ih2
+    refine ⟨max f1 f2, ?_⟩
+    have hl1 := mpegRun_mono_le (Nat.le_max_left f1 f2) hf1
+    have hl2 := evalArgsSeq_mono_le (Nat.le_max_right f1 f2) hf2
+    have hpre : prefixBeforeSuffix input rest = p := by
+      rw [hp]; exact prefixBeforeSuffix_correct_c p rest
+    rw [evalArgsSeq.eq_def]
     dsimp only
     simp only [hl1, hl2, hpre]
 

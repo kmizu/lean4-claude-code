@@ -9,3 +9,6 @@
 {"case":"310-mpeg-par-f-aaa","phase":"eval","status":"ok","result":"ok+0"}
 {"case":"311-mpeg-par-f-reject-aab","phase":"eval","status":"ok","result":"fail"}
 {"case":"312-mpeg-par-f-reject-aa","phase":"eval","status":"ok","result":"fail"}
+{"case":"320-mpeg-seq-f-abcabc","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"321-mpeg-seq-f-reject-abcabx","phase":"eval","status":"ok","result":"fail"}
+{"case":"322-mpeg-seq-f-reject-abc","phase":"eval","status":"ok","result":"fail"}

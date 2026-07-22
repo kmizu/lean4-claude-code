@@ -13,7 +13,9 @@ from `NonTrivialLanguagesSpec.scala` (`kmizu/macro_peg`), the same grammar
 `copy_language_ww` (`MacroPeg/Examples.lean`) proves for ALL `u`.
 `CallByValuePar` witnesses mirror `MacroPegCallByValueParSpec.scala`'s
 `F(A) = A A A` example (same grammar as `Examples.lean`'s `#guard` smoke
-tests, `parFGrammar`).
+tests, `parFGrammar`). `CallByValueSeq` witnesses mirror
+`MacroPegCallByValueSeqSpec.scala`'s `F(A, B, C) = A B C` example
+(`seqFGrammar`).
 -/
 
 namespace Shallot.MacroPeg
@@ -32,6 +34,13 @@ def mParCase (id : String) (input : String) : String × String :=
   (id, renderMPeg
     (mpegRun parFGrammar .callByValuePar 500 (.seq (.call parFIdx [.lit ['a']]) (.notP .any)) input.toList))
 
+/-- `F("a", "b", "c") !.` under `.callByValueSeq` — mirrors `seqFGrammar`'s
+`#guard` smoke tests in `Examples.lean`. -/
+def mSeqCase (id : String) (input : String) : String × String :=
+  (id, renderMPeg
+    (mpegRun seqFGrammar .callByValueSeq 500
+      (.seq (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) (.notP .any)) input.toList))
+
 def mCases : List (String × String) :=
   [ mCase "300-mpeg-copy-empty" "",
     mCase "301-mpeg-copy-aa" "aa",
@@ -43,6 +52,9 @@ def mCases : List (String × String) :=
     mCase "307-mpeg-copy-reject-abba" "abba",
     mParCase "310-mpeg-par-f-aaa" "aaa",
     mParCase "311-mpeg-par-f-reject-aab" "aab",
-    mParCase "312-mpeg-par-f-reject-aa" "aa" ]
+    mParCase "312-mpeg-par-f-reject-aa" "aa",
+    mSeqCase "320-mpeg-seq-f-abcabc" "abcabc",
+    mSeqCase "321-mpeg-seq-f-reject-abcabx" "abcabx",
+    mSeqCase "322-mpeg-seq-f-reject-abc" "abc" ]
 
 end Shallot.MacroPeg

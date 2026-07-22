@@ -1,17 +1,18 @@
 import MacroPeg.Syntax
 
 /-!
-# Macro PEG formal semantics (call-by-name + call-by-value-par)
+# Macro PEG formal semantics (call-by-name + call-by-value-par + call-by-value-seq)
 
 Extends `Shallot.Peg`'s `Derives` pattern to `MExp`, now parameterized over
-`Strategy` (M-PEG-2 adds `.callByValuePar` to M-PEG's `.callByName`). Every
-rule for the shared constructors (`eps`/`any`/`chr`/`range`/`lit`/`seq`/
-`alt`/`star`/`notP`/`dbg`/`paramFail`/`callMissing`/`callArity`) is
-strategy-independent — nothing about the base PEG operators, or about a
-missing rule / an arity mismatch, cares which strategy is in effect. `s` is
-simply threaded through unchanged (it is fixed for an entire derivation,
-exactly like `g` — a whole macro_peg program commits to one strategy at
-`Evaluator` construction, matching `Evaluator(grammar, strategy)`).
+`Strategy` (M-PEG-2 adds `.callByValuePar`, M-PEG-3 adds `.callByValueSeq`,
+to M-PEG's `.callByName`). Every rule for the shared constructors
+(`eps`/`any`/`chr`/`range`/`lit`/`seq`/`alt`/`star`/`notP`/`dbg`/`paramFail`/
+`callMissing`/`callArity`) is strategy-independent — nothing about the base
+PEG operators, or about a missing rule / an arity mismatch, cares which
+strategy is in effect. `s` is simply threaded through unchanged (it is fixed
+for an entire derivation, exactly like `g` — a whole macro_peg program
+commits to one strategy at `Evaluator` construction, matching
+`Evaluator(grammar, strategy)`).
 
 Strategy only matters at `.call`:
 
@@ -53,6 +54,32 @@ Strategy only matters at `.call`:
   non-terminating first argument to see the second one fail. Requiring the
   `pre` prefix to be witnessed rules this out: nothing before `badArg` can
   be non-terminating if it has an actual `DerivesArgsPar` derivation.
+- **`.callByValueSeq`** (`callSeqOk`/`callSeqFail`/`callSeqArgFail`,
+  `hs : s = .callByValueSeq`): the actual parameters are evaluated
+  SEQUENTIALLY — the first against `input`, the next against whatever input
+  remains after the first matched, and so on — exactly like a PEG Sequence
+  of the argument expressions, via the mutual `DerivesArgsSeq` relation
+  below. `DerivesArgsSeq` therefore THREADS the input: unlike
+  `DerivesArgsPar` (which fixes `input` and re-runs every argument at that
+  same position), its `cons` case recurses on `rest` (the position AFTER
+  consuming the current argument) and carries an extra `final` index — the
+  input reached after ALL arguments were threaded through. Each consumed
+  prefix still becomes a `.lit`-wrapped VALUE substituted into the body (via
+  the same capture-free `MExp.subst`), but the body is then derived from
+  `mid` (that final threaded position — `callSeqOk`/`callSeqFail`), NOT from
+  the original `input`. That is the sole behavioral difference from
+  `.callByValuePar`, whose body starts from the untouched `input`.
+  `callSeqArgFail` mirrors `callParArgFail`'s hard-won shape exactly and for
+  the same soundness reason: `args` must split as `pre ++ badArg :: post`
+  with `hpre : DerivesArgsSeq g s input pre preVals mid` witnessing that
+  every earlier argument actually succeeded (threading `input` to `mid`),
+  and `badArg` fails AT `mid` — the position reached after `pre` was
+  consumed IN SEQUENCE — not at the original `input`. An unconstrained "some
+  argument fails somewhere" rule would be unsound here too: the interpreter
+  (`evalArgsSeq`) can only ever observe an argument's failure after
+  everything before it has actually finished threading, so a non-terminating
+  earlier argument must never leave a later argument's failure derivable
+  with no fuel witness ever realizing it.
 -/
 
 namespace Shallot.MacroPeg
@@ -123,6 +150,29 @@ inductive MDerives (g : MGrammar) (s : Strategy) : MExp → List Char → MOutco
       (hpre : DerivesArgsPar g s input pre preVals)
       (hfail : MDerives g s badArg input .fail) :
       MDerives g s (.call i (pre ++ badArg :: post)) input .fail
+  | callSeqOk (i : Nat) (args : List MExp) (r : MRule) (input mid rest : List Char)
+      (vals : List MExp) (t : MTree)
+      (hs : s = .callByValueSeq)
+      (hr : ruleAtM g.rules i = some r)
+      (ha : r.arity = args.length)
+      (hargs : DerivesArgsSeq g s input args vals mid)
+      (hd : MDerives g s (MExp.subst vals r.body) mid (.ok t rest)) :
+      MDerives g s (.call i args) input (.ok (.nodeCall i t) rest)
+  | callSeqFail (i : Nat) (args : List MExp) (r : MRule) (input mid : List Char) (vals : List MExp)
+      (hs : s = .callByValueSeq)
+      (hr : ruleAtM g.rules i = some r)
+      (ha : r.arity = args.length)
+      (hargs : DerivesArgsSeq g s input args vals mid)
+      (hd : MDerives g s (MExp.subst vals r.body) mid .fail) :
+      MDerives g s (.call i args) input .fail
+  | callSeqArgFail (i : Nat) (pre : List MExp) (badArg : MExp) (post : List MExp) (r : MRule)
+      (input mid : List Char) (preVals : List MExp)
+      (hs : s = .callByValueSeq)
+      (hr : ruleAtM g.rules i = some r)
+      (ha : r.arity = (pre ++ badArg :: post).length)
+      (hpre : DerivesArgsSeq g s input pre preVals mid)
+      (hfail : MDerives g s badArg mid .fail) :
+      MDerives g s (.call i (pre ++ badArg :: post)) input .fail
   | callMissing (i : Nat) (args : List MExp) (input : List Char)
       (hr : ruleAtM g.rules i = none) :
       MDerives g s (.call i args) input .fail
@@ -182,6 +232,28 @@ inductive DerivesArgsPar (g : MGrammar) (s : Strategy) :
       (hp : input = p ++ rest)
       (h2 : DerivesArgsPar g s input as vs) :
       DerivesArgsPar g s input (a :: as) (.lit p :: vs)
+
+/-- Evaluates a list of actual parameters under `.callByValueSeq`: the
+arguments are derived SEQUENTIALLY and the input is THREADED through them —
+`a` against `input`, the remaining `as` against `rest` (the position `a`
+left off at), and so on, exactly like a PEG Sequence of the argument
+expressions. On success each `a` contributes `.lit p` (its consumed prefix,
+explicitly witnessed via `hp` rather than extracted from `MDerives`'s own
+suffix property) to the output value list, and the relation reports the
+`final` input position reached after threading through the WHOLE list — that
+extra index is what distinguishes this from `DerivesArgsPar`, which fixes
+`input` for every element and yields no threaded remainder. Total success of
+every element is REQUIRED to derive this relation at all; the "some element
+fails" case is `MDerives.callSeqArgFail` above (kept separate as it produces
+no value list, and pins the failure to the threaded `mid` position). -/
+inductive DerivesArgsSeq (g : MGrammar) (s : Strategy) :
+    List Char → List MExp → List MExp → List Char → Prop where
+  | nil (input : List Char) : DerivesArgsSeq g s input [] [] input
+  | cons (a : MExp) (as : List MExp) (input p rest final : List Char) (t : MTree) (vs : List MExp)
+      (h1 : MDerives g s a input (.ok t rest))
+      (hp : input = p ++ rest)
+      (h2 : DerivesArgsSeq g s rest as vs final) :
+      DerivesArgsSeq g s input (a :: as) (.lit p :: vs) final
 
 end
 
