@@ -500,5 +500,102 @@ theorem mpegRun_sound {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : Li
       dsimp only at h
       cases h
       exact MDerives.dbg e x
+    | lam ar bod =>
+      dsimp only at h
+      cases h
+      exact MDerives.lam ar bod x
+    | callParam k args =>
+      dsimp only at h
+      cases h
+      exact MDerives.callParamFail k args x
+    | invoke ar bod args =>
+      dsimp only at h
+      by_cases hbeq : (ar == args.length) = true
+      · simp only [if_pos hbeq] at h
+        have ha : ar = args.length := by simpa using hbeq
+        cases s with
+        | callByName =>
+          dsimp only at h
+          cases h1 : mpegRun g .callByName f (MExp.subst args bod) x with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            cases o1 with
+            | fail =>
+              dsimp only at h
+              cases h
+              exact MDerives.invokeNameFail ar bod args x rfl ha (ih h1)
+            | ok t rest =>
+              dsimp only at h
+              cases h
+              exact MDerives.invokeNameOk ar bod args x rest t rfl ha (ih h1)
+        | callByValuePar =>
+          dsimp only at h
+          cases h1 : evalArgsPar g .callByValuePar f x args with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            obtain ⟨hSome, hNone⟩ := evalArgsPar_sound_of_mpegRun_sound (@ih) h1
+            cases o1 with
+            | none =>
+              dsimp only at h
+              cases h
+              obtain ⟨pre, badArg, post, preVals, heq, hpre, hbad⟩ := hNone rfl
+              rw [heq]
+              exact MDerives.invokeParArgFail ar bod pre badArg post x preVals rfl (heq ▸ ha) hpre hbad
+            | some vals =>
+              dsimp only at h
+              have hargs := hSome vals rfl
+              cases h2 : mpegRun g .callByValuePar f (MExp.subst vals bod) x with
+              | none => rw [h2] at h; exact absurd h (by simp)
+              | some o2 =>
+                rw [h2] at h
+                cases o2 with
+                | fail =>
+                  dsimp only at h
+                  cases h
+                  exact MDerives.invokeParFail ar bod args x vals rfl ha hargs (ih h2)
+                | ok t rest =>
+                  dsimp only at h
+                  cases h
+                  exact MDerives.invokeParOk ar bod args x rest vals t rfl ha hargs (ih h2)
+        | callByValueSeq =>
+          dsimp only at h
+          cases h1 : evalArgsSeq g .callByValueSeq f x args with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            obtain ⟨hSome, hNone⟩ := evalArgsSeq_sound_of_mpegRun_sound (@ih) h1
+            cases o1 with
+            | none =>
+              dsimp only at h
+              cases h
+              obtain ⟨pre, badArg, post, preVals, mid, heq, hpre, hbad⟩ := hNone rfl
+              rw [heq]
+              exact MDerives.invokeSeqArgFail ar bod pre badArg post x mid preVals rfl (heq ▸ ha) hpre hbad
+            | some p =>
+              cases p with
+              | mk vals mid =>
+                dsimp only at h
+                have hargs := hSome vals mid rfl
+                cases h2 : mpegRun g .callByValueSeq f (MExp.subst vals bod) mid with
+                | none => rw [h2] at h; exact absurd h (by simp)
+                | some o2 =>
+                  rw [h2] at h
+                  cases o2 with
+                  | fail =>
+                    dsimp only at h
+                    cases h
+                    exact MDerives.invokeSeqFail ar bod args x mid vals rfl ha hargs (ih h2)
+                  | ok t rest =>
+                    dsimp only at h
+                    cases h
+                    exact MDerives.invokeSeqOk ar bod args x mid rest vals t rfl ha hargs (ih h2)
+      · simp only [if_neg hbeq] at h
+        cases h
+        have hne : ar ≠ args.length := by
+          intro he
+          exact hbeq (by simp [he])
+        exact MDerives.invokeArity ar bod args x hne
 
 end Shallot.MacroPeg

@@ -28,6 +28,11 @@ original `input` — matching `MDerives.callSeqOk`/`callSeqFail`/
 `.param k` has a dead `some .fail` branch, exactly like `pegRun`'s dead
 inner-`star` branch: unreachable once `subst` has fired at the enclosing
 `call` (see `MacroPeg/Syntax.lean`), kept only so the pattern match is total.
+`.callParam` is dead for the same reason. `.lam` is an unconditional
+zero-width success, exactly like `.dbg`. `.invoke` mirrors `.call`'s
+three-way `Strategy` dispatch (reusing `evalArgsPar`/`evalArgsSeq` as-is)
+but has no "missing" branch — `arity`/`body` are already in hand, produced
+by `subst` resolving a `.callParam`, never looked up.
 -/
 
 namespace Shallot.MacroPeg
@@ -73,6 +78,36 @@ def mpegRun (g : MGrammar) (s : Strategy) : Nat → MExp → List Char → Optio
       | some rest => some (.ok (.leaf str) rest)
       | none => some .fail
     | .param _ => some .fail -- unreachable once `subst` has fired; kept for totality
+    | .lam _ _ => some (.ok .lamT input)
+    | .callParam _ _ => some .fail -- unreachable once `subst` has fired; kept for totality
+    | .invoke ar bod args =>
+      -- Same Bool `==` arity-check discipline as `.call` (Lens whitelist).
+      if ar == args.length then
+        match s with
+        | .callByName =>
+          match mpegRun g s fuel (MExp.subst args bod) input with
+          | some (.ok t rest) => some (.ok (.nodeInvoke t) rest)
+          | some .fail => some .fail
+          | none => none
+        | .callByValuePar =>
+          match evalArgsPar g s fuel input args with
+          | none => none
+          | some none => some .fail
+          | some (some vals) =>
+            match mpegRun g s fuel (MExp.subst vals bod) input with
+            | some (.ok t rest) => some (.ok (.nodeInvoke t) rest)
+            | some .fail => some .fail
+            | none => none
+        | .callByValueSeq =>
+          match evalArgsSeq g s fuel input args with
+          | none => none
+          | some none => some .fail
+          | some (some (vals, mid)) =>
+            match mpegRun g s fuel (MExp.subst vals bod) mid with
+            | some (.ok t rest) => some (.ok (.nodeInvoke t) rest)
+            | some .fail => some .fail
+            | none => none
+      else some .fail
     | .call i args =>
       match ruleAtM g.rules i with
       | none => some .fail

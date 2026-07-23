@@ -400,4 +400,74 @@ the body `"abc"` has nothing left to match. -/
   (mpegRun seqFGrammar .callByValueSeq 200
     (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) "abc".toList) == "fail"
 
+/-! ## Higher-order (M-PEG-4) smoke tests
+
+Same discipline as the Par/Seq blocks above — computed confirmation via
+`#guard`, not a headline theorem (the closure-return-and-apply-elsewhere
+case remains out of scope; see `MacroPeg/Syntax.lean`'s module docstring).
+There is no surface `.peg` parser in this project, so "pass a named rule as
+a callable value" and "pass a lambda literal" both elaborate to the exact
+same `.lam arity body` shape — a caller wanting to reference a named rule
+`R` as a value just writes `.lam R.arity R.body` directly, exactly as a
+lambda literal would. The two examples below exercise that unification from
+both ends. -/
+
+/-- Mirrors `HigherOrderEvalSpec.scala`'s "evaluates nested macro
+application": `S = Double(Plus1, "aa") !.; Plus1(s: ?) = s s; Double(f: ?,
+s: ?) = f(f(s));`. `Plus1` is passed as a value — here written directly as
+the `.lam` wrapping its (arity, body) rather than through a name, since
+there is no separate name resolution step in this project's AST. `Double`'s
+body applies its callable parameter `f` to `f(s)` — TWO nested `.callParam`
+uses, exercising `.invoke` invoking an argument that is itself an
+unevaluated `.invoke` (call-by-name: nothing forces the inner one before
+the outer one needs it). -/
+def plus1Body : MExp := .seq (.param 0) (.param 0)
+
+def doubleHofIdx : Nat := 0
+
+/-- `Double(f: ?, s: ?) = f(f(s))`, i.e. `callParam 0 [callParam 0 [param 1]]`. -/
+def doubleHofBody : MExp := .callParam 0 [.callParam 0 [.param 1]]
+
+def doubleHofGrammar : MGrammar := { rules := [{ arity := 2, body := doubleHofBody }] }
+
+/-! `Double(Plus1, "aa")` — doubling twice, "aa" -> "aaaa" -> "aaaaaaaa". -/
+#guard renderMPeg
+  (mpegRun doubleHofGrammar .callByName 200
+    (.call doubleHofIdx [.lam 1 plus1Body, .lit ['a', 'a']]) "aaaaaaaa".toList) == "ok+0"
+
+/-! Only one doubling's worth of input: the SECOND `f` application has
+nothing left after the first consumes all four characters. -/
+#guard renderMPeg
+  (mpegRun doubleHofGrammar .callByName 200
+    (.call doubleHofIdx [.lam 1 plus1Body, .lit ['a', 'a']]) "aaaa".toList) == "fail"
+
+/-- Mirrors `HigherOrderAdvancedSpec.scala`'s "uses higher-order functions
+with multiple parameters": `Map2(f: ?, x: ?, y: ?) = f(x, y); S =
+Map2((x, y -> x y x), "a", "b") !.;`. Exercises a LAMBDA LITERAL (not a
+named-rule reference) of arity 2 — checks `.invoke`'s multi-argument
+substitution, not just the single-argument shape `plus1Body` above uses. -/
+def xyxBody : MExp := .seq (.param 0) (.seq (.param 1) (.param 0))
+
+def map2Idx : Nat := 0
+
+/-- `Map2(f: ?, x: ?, y: ?) = f(x, y)`, i.e. `callParam 0 [param 1, param 2]`. -/
+def map2Body : MExp := .callParam 0 [.param 1, .param 2]
+
+def map2Grammar : MGrammar := { rules := [{ arity := 3, body := map2Body }] }
+
+/-! `Map2((x,y -> x y x), "a", "b")` matches `"a" ++ "b" ++ "a"` = `"aba"`. -/
+#guard renderMPeg
+  (mpegRun map2Grammar .callByName 200
+    (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) "aba".toList) == "ok+0"
+
+/-! Wrong last character. -/
+#guard renderMPeg
+  (mpegRun map2Grammar .callByName 200
+    (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) "abx".toList) == "fail"
+
+/-! Too short. -/
+#guard renderMPeg
+  (mpegRun map2Grammar .callByName 200
+    (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) "ab".toList) == "fail"
+
 end Shallot.MacroPeg

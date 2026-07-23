@@ -213,6 +213,219 @@ theorem mderives_det {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char} {o
     intro h₂
     cases h₂ with
     | paramFail _ _ => rfl
+  -- M-PEG-4: `.lam`/`.callParam` are trivial (unconditional, exactly like
+  -- `.dbg`/`.param`'s `paramFail`); `.invoke` mirrors `.call`'s three-way
+  -- `Strategy` split with no rule-lookup indirection (`ar`/`bod` are already
+  -- part of the `.invoke` node itself, so there is no `callMissing`
+  -- analogue and no `rw [hr] at hr'; injection hr'` dance anywhere below).
+  case lam ar bod input =>
+    intro h₂
+    cases h₂ with
+    | lam _ _ _ => rfl
+  case callParamFail k args input =>
+    intro h₂
+    cases h₂ with
+    | callParamFail _ _ _ => rfl
+  case invokeNameOk ar bod args input rest t hs ha hd ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      have h3 := ih hd'
+      injection h3 with ht hrest
+      subst ht
+      subst hrest
+      rfl
+    | invokeNameFail _ _ _ _ hs' ha' hd' =>
+      have h3 := ih hd'
+      injection h3
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParArgFail _ _ _ _ _ _ _ hs' _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqFail _ _ _ _ mid' vals' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ hs' _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeArity _ _ _ _ ha' =>
+      exact absurd ha ha'
+  case invokeNameFail ar bod args input hs ha hd ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      have h3 := ih hd'
+      injection h3
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
+  case invokeParOk ar bod args input rest vals t hs ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      have hveq := ihargs.1 vals' hargs'
+      subst hveq
+      have h3 := ih hd'
+      injection h3 with ht hrest
+      subst ht
+      subst hrest
+      rfl
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' =>
+      have hveq := ihargs.1 vals' hargs'
+      subst hveq
+      have h3 := ih hd'
+      injection h3
+    | invokeParArgFail _ _ pre badArg post _ preVals hs' ha' hpre' hfail' =>
+      have hmem2 : badArg ∈ pre ++ badArg :: post := by simp
+      obtain ⟨t0, r0, hc⟩ := ihargs.2 badArg hmem2 .fail hfail'
+      injection hc
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqFail _ _ _ _ mid' vals' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ hs' _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeArity _ _ _ _ ha' =>
+      exact absurd ha ha'
+  case invokeParFail ar bod args input vals hs ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      have hveq := ihargs.1 vals' hargs'
+      subst hveq
+      have h3 := ih hd'
+      injection h3
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
+  case invokeParArgFail ar bod pre badArg post input preVals hs ha hpre hfail ihpre ih =>
+    intro h₂
+    generalize hargeq : pre ++ badArg :: post = args at h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      have hmem0 : badArg ∈ pre ++ badArg :: post := by simp
+      rw [hargeq] at hmem0
+      obtain ⟨t0, r0, hok⟩ := derivesArgsPar_mem_ok hargs' hmem0
+      have h3 := ih hok
+      injection h3
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
+  case invokeSeqOk ar bod args input mid rest vals t hs ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParArgFail _ _ _ _ _ _ _ hs' _ _ _ =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3 with ht hrest
+      subst ht
+      subst hrest
+      rfl
+    | invokeSeqFail _ _ _ _ mid' vals' hs' ha' hargs' hd' =>
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3
+    | invokeSeqArgFail _ _ pre badArg post _ mid' preVals hs' ha' hpre' hfail' =>
+      obtain ⟨t0, r0, hc⟩ := ihargs.2 pre badArg post preVals mid' rfl hpre' MOutcome.fail hfail'
+      injection hc
+    | invokeArity _ _ _ _ ha' =>
+      exact absurd ha ha'
+  case invokeSeqFail ar bod args input mid vals hs ha hargs hd ihargs ih =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      obtain ⟨hveq, hmeq⟩ := ihargs.1 vals' mid' hargs'
+      subst hveq
+      subst hmeq
+      have h3 := ih hd'
+      injection h3
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
+  case invokeSeqArgFail ar bod pre badArg post input mid preVals hs ha hpre hfail ihpre ih =>
+    intro h₂
+    generalize hargeq : pre ++ badArg :: post = args at h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd (hs.symm.trans hs') (by decide)
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid'' rest' vals' t' hs' ha' hargs' hd' =>
+      rw [← hargeq] at hargs'
+      obtain ⟨preVals', mid', hpd, t0, r0, hbad⟩ := derivesArgsSeq_split_ok hargs'
+      obtain ⟨_, hmeq⟩ := ihpre.1 preVals' mid' hpd
+      subst hmeq
+      have h3 := ih hbad
+      injection h3
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
+  case invokeArity ar bod args input ha =>
+    intro h₂
+    cases h₂ with
+    | invokeNameOk _ _ _ _ rest' t' hs' ha' hd' =>
+      exact absurd ha' ha
+    | invokeNameFail _ _ _ _ hs' ha' hd' => rfl
+    | invokeParOk _ _ _ _ rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd ha' ha
+    | invokeParFail _ _ _ _ vals' hs' ha' hargs' hd' => rfl
+    | invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqOk _ _ _ _ mid' rest' vals' t' hs' ha' hargs' hd' =>
+      exact absurd ha' ha
+    | invokeSeqFail _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+    | invokeArity _ _ _ _ _ => rfl
   case callNameOk i args r input rest t hs hr ha hd ih =>
     intro h₂
     cases h₂ with

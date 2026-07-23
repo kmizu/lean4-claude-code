@@ -124,6 +124,9 @@ object MacroPeg_MExp {
   final case class star(e: MacroPeg_MExp) extends MacroPeg_MExp
   final case class notP(e: MacroPeg_MExp) extends MacroPeg_MExp
   final case class dbg(e: MacroPeg_MExp) extends MacroPeg_MExp
+  final case class lam(arity: BigInt, body: MacroPeg_MExp) extends MacroPeg_MExp
+  final case class callParam(k: BigInt, args: List[MacroPeg_MExp]) extends MacroPeg_MExp
+  final case class invoke(arity: BigInt, body: MacroPeg_MExp, args: List[MacroPeg_MExp]) extends MacroPeg_MExp
 }
 
 final case class MacroPeg_MGrammar(rules: List[MacroPeg_MRule])
@@ -147,6 +150,8 @@ object MacroPeg_MTree {
   final case class starCons(hd: MacroPeg_MTree, tl: MacroPeg_MTree) extends MacroPeg_MTree
   final case class notT() extends MacroPeg_MTree
   final case class dbgT() extends MacroPeg_MTree
+  final case class lamT() extends MacroPeg_MTree
+  final case class nodeInvoke(t: MacroPeg_MTree) extends MacroPeg_MTree
 }
 
 sealed trait MacroPeg_Strategy
@@ -629,6 +634,12 @@ def MacroPeg_MExp_subst(args: List[MacroPeg_MExp], x1: MacroPeg_MExp): MacroPeg_
     case MacroPeg_MExp.star(e) => MacroPeg_MExp.star(MacroPeg_MExp_subst(args, e))
     case MacroPeg_MExp.notP(e) => MacroPeg_MExp.notP(MacroPeg_MExp_subst(args, e))
     case MacroPeg_MExp.dbg(e) => MacroPeg_MExp.dbg(MacroPeg_MExp_subst(args, e))
+    case MacroPeg_MExp.lam(ar, bod) => MacroPeg_MExp.lam(ar, bod)
+    case MacroPeg_MExp.callParam(k, margs) => (MacroPeg_argAt(args, k) match {
+    case Some(MacroPeg_MExp.lam(ar, bod)) => MacroPeg_MExp.invoke(ar, bod, MacroPeg_MExp_substArgs(args, margs))
+    case x24 => MacroPeg_MExp_failAlways
+  })
+    case MacroPeg_MExp.invoke(ar, bod, margs) => MacroPeg_MExp.invoke(ar, bod, MacroPeg_MExp_substArgs(args, margs))
   })
 
 def MacroPeg_MExp_substArgs(args: List[MacroPeg_MExp], x1: List[MacroPeg_MExp]): List[MacroPeg_MExp] =
@@ -652,6 +663,15 @@ def MacroPeg_copyGrammar: MacroPeg_MGrammar =
   MacroPeg_MGrammar((MacroPeg_MRule(BigInt(1), MacroPeg_copyBody) :: Nil))
 
 def MacroPeg_copyIdx: BigInt =
+  BigInt(0)
+
+def MacroPeg_doubleHofBody: MacroPeg_MExp =
+  MacroPeg_MExp.callParam(BigInt(0), (MacroPeg_MExp.callParam(BigInt(0), (MacroPeg_MExp.param(BigInt(1)) :: Nil)) :: Nil))
+
+def MacroPeg_doubleHofGrammar: MacroPeg_MGrammar =
+  MacroPeg_MGrammar((MacroPeg_MRule(BigInt(2), MacroPeg_doubleHofBody) :: Nil))
+
+def MacroPeg_doubleHofIdx: BigInt =
   BigInt(0)
 
 def MacroPeg_evalArgsPar(g: MacroPeg_MGrammar, s: MacroPeg_Strategy, fuel: BigInt, input: List[BigInt], x4: List[MacroPeg_MExp]): Option[Option[List[MacroPeg_MExp]]] =
@@ -686,7 +706,13 @@ def MacroPeg_mCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_copyGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_copyIdx, (MacroPeg_MExp.lit(Nil) :: Nil)), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mCases: List[(String, String)] =
-  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: Nil))))))))))))))
+  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: (MacroPeg_mHofDoubleCase("330-mpeg-hof-double-aaaaaaaa", "aaaaaaaa") :: (MacroPeg_mHofDoubleCase("331-mpeg-hof-double-reject-aaaa", "aaaa") :: (MacroPeg_mHofMap2Case("332-mpeg-hof-map2-aba", "aba") :: (MacroPeg_mHofMap2Case("333-mpeg-hof-map2-reject-abx", "abx") :: (MacroPeg_mHofMap2Case("334-mpeg-hof-map2-reject-ab", "ab") :: Nil)))))))))))))))))))
+
+def MacroPeg_mHofDoubleCase(id: String, input: String): (String, String) =
+  (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_doubleHofGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_doubleHofIdx, (MacroPeg_MExp.lam(BigInt(1), MacroPeg_plus1Body) :: (MacroPeg_MExp.lit((BigInt(0x61) :: (BigInt(0x61) :: Nil))) :: Nil))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
+
+def MacroPeg_mHofMap2Case(id: String, input: String): (String, String) =
+  (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_map2Grammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_map2Idx, (MacroPeg_MExp.lam(BigInt(2), MacroPeg_xyxBody) :: (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x62) :: Nil)) :: Nil)))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mParCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_parFGrammar, MacroPeg_Strategy.callByValuePar(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_parFIdx, (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: Nil)), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
@@ -694,42 +720,76 @@ def MacroPeg_mParCase(id: String, input: String): (String, String) =
 def MacroPeg_mSeqCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_seqFGrammar, MacroPeg_Strategy.callByValueSeq(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_seqFIdx, (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x62) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x63) :: Nil)) :: Nil)))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
+def MacroPeg_map2Body: MacroPeg_MExp =
+  MacroPeg_MExp.callParam(BigInt(0), (MacroPeg_MExp.param(BigInt(1)) :: (MacroPeg_MExp.param(BigInt(2)) :: Nil)))
+
+def MacroPeg_map2Grammar: MacroPeg_MGrammar =
+  MacroPeg_MGrammar((MacroPeg_MRule(BigInt(3), MacroPeg_map2Body) :: Nil))
+
+def MacroPeg_map2Idx: BigInt =
+  BigInt(0)
+
 def MacroPeg_mpegRun(g: MacroPeg_MGrammar, s: MacroPeg_Strategy, x2: BigInt, x3: MacroPeg_MExp, x4: List[BigInt]): Option[MacroPeg_MOutcome] =
-  ((x2, x3, x4) match {
-    case (_g0, x5, x6) if _g0 == BigInt(0) => None
-    case (_g0, MacroPeg_MExp.eps(), x8) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf(Nil), x8)) }
-    case (_g0, MacroPeg_MExp.any(), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
-    case (_g0, MacroPeg_MExp.any(), (c :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c :: Nil)), cs)) }
-    case (_g0, MacroPeg_MExp.chr(c), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
-    case (_g0, MacroPeg_MExp.chr(c), (c_1 :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (beqChar(c, c_1) == true) then Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c_1 :: Nil)), cs)) else Some(MacroPeg_MOutcome.fail())) }
-    case (_g0, MacroPeg_MExp.range(lo, hi), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
-    case (_g0, MacroPeg_MExp.range(lo, hi), (c :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (Bool_and(leChar(lo, c), leChar(c, hi)) == true) then Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c :: Nil)), cs)) else Some(MacroPeg_MOutcome.fail())) }
-    case (_g0, MacroPeg_MExp.lit(str), x29) if _g0 >= 1 => { val fuel = _g0 - 1; (stripPrefix_u3f(str, x29) match {
+  ((s, x2, x3, x4) match {
+    case (s_1, _g0, x6, x7) if _g0 == BigInt(0) => None
+    case (s_1, _g0, MacroPeg_MExp.eps(), x10) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf(Nil), x10)) }
+    case (s_1, _g0, MacroPeg_MExp.any(), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
+    case (s_1, _g0, MacroPeg_MExp.any(), (c :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c :: Nil)), cs)) }
+    case (s_1, _g0, MacroPeg_MExp.chr(c), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
+    case (s_1, _g0, MacroPeg_MExp.chr(c), (c_1 :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (beqChar(c, c_1) == true) then Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c_1 :: Nil)), cs)) else Some(MacroPeg_MOutcome.fail())) }
+    case (s_1, _g0, MacroPeg_MExp.range(lo, hi), Nil) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
+    case (s_1, _g0, MacroPeg_MExp.range(lo, hi), (c :: cs)) if _g0 >= 1 => { val fuel = _g0 - 1; (if (Bool_and(leChar(lo, c), leChar(c, hi)) == true) then Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf((c :: Nil)), cs)) else Some(MacroPeg_MOutcome.fail())) }
+    case (s_1, _g0, MacroPeg_MExp.lit(str), x38) if _g0 >= 1 => { val fuel = _g0 - 1; (stripPrefix_u3f(str, x38) match {
     case Some(rest) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.leaf(str), rest))
     case None => Some(MacroPeg_MOutcome.fail())
   }) }
-    case (_g0, MacroPeg_MExp.param(k), x34) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
-    case (_g0, MacroPeg_MExp.call(i, args), x38) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_ruleAtM(g.rules, i) match {
+    case (s_1, _g0, MacroPeg_MExp.param(k), x44) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
+    case (s_1, _g0, MacroPeg_MExp.lam(arity, body), x49) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.lamT(), x49)) }
+    case (s_1, _g0, MacroPeg_MExp.callParam(k, args), x54) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.fail()) }
+    case (MacroPeg_Strategy.callByName(), _g0, MacroPeg_MExp.invoke(ar, bod, args), x59) if _g0 >= 1 => { val fuel = _g0 - 1; (if ((ar == List_length[MacroPeg_MExp](args)) == true) then (MacroPeg_mpegRun(g, MacroPeg_Strategy.callByName(), fuel, MacroPeg_MExp_subst(args, bod), x59) match {
+    case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeInvoke(t), rest))
+    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
+    case None => None
+  }) else Some(MacroPeg_MOutcome.fail())) }
+    case (MacroPeg_Strategy.callByValuePar(), _g0, MacroPeg_MExp.invoke(ar, bod, args), x68) if _g0 >= 1 => { val fuel = _g0 - 1; (if ((ar == List_length[MacroPeg_MExp](args)) == true) then (MacroPeg_evalArgsPar(g, MacroPeg_Strategy.callByValuePar(), fuel, x68, args) match {
+    case None => None
+    case Some(None) => Some(MacroPeg_MOutcome.fail())
+    case Some(Some(vals)) => (MacroPeg_mpegRun(g, MacroPeg_Strategy.callByValuePar(), fuel, MacroPeg_MExp_subst(vals, bod), x68) match {
+    case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeInvoke(t), rest))
+    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
+    case None => None
+  })
+  }) else Some(MacroPeg_MOutcome.fail())) }
+    case (MacroPeg_Strategy.callByValueSeq(), _g0, MacroPeg_MExp.invoke(ar, bod, args), x80) if _g0 >= 1 => { val fuel = _g0 - 1; (if ((ar == List_length[MacroPeg_MExp](args)) == true) then (MacroPeg_evalArgsSeq(g, MacroPeg_Strategy.callByValueSeq(), fuel, x80, args) match {
+    case None => None
+    case Some(None) => Some(MacroPeg_MOutcome.fail())
+    case Some(Some((vals, mid))) => (MacroPeg_mpegRun(g, MacroPeg_Strategy.callByValueSeq(), fuel, MacroPeg_MExp_subst(vals, bod), mid) match {
+    case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeInvoke(t), rest))
+    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
+    case None => None
+  })
+  }) else Some(MacroPeg_MOutcome.fail())) }
+    case (s_1, _g0, MacroPeg_MExp.call(i, args), x93) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_ruleAtM(g.rules, i) match {
     case None => Some(MacroPeg_MOutcome.fail())
-    case Some(r) => (if ((r.arity == List_length[MacroPeg_MExp](args)) == true) then (s match {
-    case MacroPeg_Strategy.callByName() => (MacroPeg_mpegRun(g, s, fuel, MacroPeg_MExp_subst(args, r.body), x38) match {
+    case Some(r) => (if ((r.arity == List_length[MacroPeg_MExp](args)) == true) then (s_1 match {
+    case MacroPeg_Strategy.callByName() => (MacroPeg_mpegRun(g, s_1, fuel, MacroPeg_MExp_subst(args, r.body), x93) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeCall(i, t), rest))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
   })
-    case MacroPeg_Strategy.callByValuePar() => (MacroPeg_evalArgsPar(g, s, fuel, x38, args) match {
+    case MacroPeg_Strategy.callByValuePar() => (MacroPeg_evalArgsPar(g, s_1, fuel, x93, args) match {
     case None => None
     case Some(None) => Some(MacroPeg_MOutcome.fail())
-    case Some(Some(vals)) => (MacroPeg_mpegRun(g, s, fuel, MacroPeg_MExp_subst(vals, r.body), x38) match {
+    case Some(Some(vals)) => (MacroPeg_mpegRun(g, s_1, fuel, MacroPeg_MExp_subst(vals, r.body), x93) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeCall(i, t), rest))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
   })
   })
-    case MacroPeg_Strategy.callByValueSeq() => (MacroPeg_evalArgsSeq(g, s, fuel, x38, args) match {
+    case MacroPeg_Strategy.callByValueSeq() => (MacroPeg_evalArgsSeq(g, s_1, fuel, x93, args) match {
     case None => None
     case Some(None) => Some(MacroPeg_MOutcome.fail())
-    case Some(Some((vals, mid))) => (MacroPeg_mpegRun(g, s, fuel, MacroPeg_MExp_subst(vals, r.body), mid) match {
+    case Some(Some((vals, mid))) => (MacroPeg_mpegRun(g, s_1, fuel, MacroPeg_MExp_subst(vals, r.body), mid) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.nodeCall(i, t), rest))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
@@ -737,8 +797,8 @@ def MacroPeg_mpegRun(g: MacroPeg_MGrammar, s: MacroPeg_Strategy, x2: BigInt, x3:
   })
   }) else Some(MacroPeg_MOutcome.fail()))
   }) }
-    case (_g0, MacroPeg_MExp.seq(e_u2081, e_u2082), x66) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s, fuel, e_u2081, x66) match {
-    case Some(MacroPeg_MOutcome.ok(t, rest)) => (MacroPeg_mpegRun(g, s, fuel, e_u2082, rest) match {
+    case (s_1, _g0, MacroPeg_MExp.seq(e_u2081, e_u2082), x122) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s_1, fuel, e_u2081, x122) match {
+    case Some(MacroPeg_MOutcome.ok(t, rest)) => (MacroPeg_mpegRun(g, s_1, fuel, e_u2082, rest) match {
     case Some(MacroPeg_MOutcome.ok(t_1, rest_1)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.seq(t, t_1), rest_1))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
@@ -746,30 +806,30 @@ def MacroPeg_mpegRun(g: MacroPeg_MGrammar, s: MacroPeg_Strategy, x2: BigInt, x3:
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
   }) }
-    case (_g0, MacroPeg_MExp.alt(e_u2081, e_u2082), x78) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s, fuel, e_u2081, x78) match {
+    case (s_1, _g0, MacroPeg_MExp.alt(e_u2081, e_u2082), x135) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s_1, fuel, e_u2081, x135) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.choiceL(t), rest))
-    case Some(MacroPeg_MOutcome.fail()) => (MacroPeg_mpegRun(g, s, fuel, e_u2082, x78) match {
+    case Some(MacroPeg_MOutcome.fail()) => (MacroPeg_mpegRun(g, s_1, fuel, e_u2082, x135) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.choiceR(t), rest))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
   })
     case None => None
   }) }
-    case (_g0, MacroPeg_MExp.star(e_1), x89) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s, fuel, e_1, x89) match {
-    case Some(MacroPeg_MOutcome.ok(t, rest)) => (MacroPeg_mpegRun(g, s, fuel, MacroPeg_MExp.star(e_1), rest) match {
+    case (s_1, _g0, MacroPeg_MExp.star(e_1), x147) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s_1, fuel, e_1, x147) match {
+    case Some(MacroPeg_MOutcome.ok(t, rest)) => (MacroPeg_mpegRun(g, s_1, fuel, MacroPeg_MExp.star(e_1), rest) match {
     case Some(MacroPeg_MOutcome.ok(t_1, rest_1)) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.starCons(t, t_1), rest_1))
     case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.fail())
     case None => None
   })
-    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.starNil(), x89))
+    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.starNil(), x147))
     case None => None
   }) }
-    case (_g0, MacroPeg_MExp.notP(e_1), x100) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s, fuel, e_1, x100) match {
+    case (s_1, _g0, MacroPeg_MExp.notP(e_1), x159) if _g0 >= 1 => { val fuel = _g0 - 1; (MacroPeg_mpegRun(g, s_1, fuel, e_1, x159) match {
     case Some(MacroPeg_MOutcome.ok(t, rest)) => Some(MacroPeg_MOutcome.fail())
-    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.notT(), x100))
+    case Some(MacroPeg_MOutcome.fail()) => Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.notT(), x159))
     case None => None
   }) }
-    case (_g0, MacroPeg_MExp.dbg(e_1), x107) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.dbgT(), x107)) }
+    case (s_1, _g0, MacroPeg_MExp.dbg(e_1), x167) if _g0 >= 1 => { val fuel = _g0 - 1; Some(MacroPeg_MOutcome.ok(MacroPeg_MTree.dbgT(), x167)) }
   })
 
 def MacroPeg_parFBody: MacroPeg_MExp =
@@ -780,6 +840,9 @@ def MacroPeg_parFGrammar: MacroPeg_MGrammar =
 
 def MacroPeg_parFIdx: BigInt =
   BigInt(0)
+
+def MacroPeg_plus1Body: MacroPeg_MExp =
+  MacroPeg_MExp.seq(MacroPeg_MExp.param(BigInt(0)), MacroPeg_MExp.param(BigInt(0)))
 
 def MacroPeg_prefixBeforeSuffix(x0: List[BigInt], x1: List[BigInt]): List[BigInt] =
   (x0 match {
@@ -810,6 +873,9 @@ def MacroPeg_seqFGrammar: MacroPeg_MGrammar =
 
 def MacroPeg_seqFIdx: BigInt =
   BigInt(0)
+
+def MacroPeg_xyxBody: MacroPeg_MExp =
+  MacroPeg_MExp.seq(MacroPeg_MExp.param(BigInt(0)), MacroPeg_MExp.seq(MacroPeg_MExp.param(BigInt(1)), MacroPeg_MExp.param(BigInt(0))))
 
 def NT_addE: BigInt =
   BigInt(14)

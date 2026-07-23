@@ -86,7 +86,7 @@
 i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版は 318 ファイル
 全件で Lean 側と判定同一（不正 UTF-8 の扱い込み）。`make verify` に常設。
 
-## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3）: kmizu/macro_peg の三戦略意味論
+## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3 / M-PEG-4）: kmizu/macro_peg の意味論
 
 `MExp`（`.param k` = 現在の規則活性化の第 k 実引数、`.call i args` = 規則 i 呼び出し）
 と、それに対する新しい導出関係 `MDerives` / インタプリタ `mpegRun` を独立モジュール
@@ -95,11 +95,13 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
 整形式性仮定ゼロ、fuel 総称インタプリタ）を踏襲する並行実装。M-PEG（`CallByName`
 のみ）の後続として、M-PEG-2 で `Strategy`（`.callByName` / `.callByValuePar`）
 パラメータを `MDerives`/`mpegRun` に通し、`CallByValuePar`（実引数を同一位置で
-独立評価するバックリファレンス風の戦略）を追加。さらに M-PEG-3 で `Strategy` に
+独立評価するバックリファレンス風の戦略）を追加。M-PEG-3 で `Strategy` に
 `.callByValueSeq` を加え、`CallByValueSeq`（実引数を左から順に評価し、消費した
 入力位置を次の引数へスレッディングし、規則本体はその最終位置から始まる戦略）を
-形式化した——いずれも既存ファイルへの retrofit であり、既存の5定理・headline定理
-も含めすべて再検証済み。
+形式化。さらに M-PEG-4 で高階関数レイヤーの一部——`.lam`（callable な値、名前付き
+ルール参照とラムダリテラルを統一表現）・`.callParam`（束縛された callable の呼び出し）・
+`.invoke`（`subst` が `.callParam` を解決した後の形）——を追加した。いずれも既存
+ファイルへの retrofit であり、既存の定理・headline定理も含めすべて再検証済み。
 
 | 定理 | 内容 | 公理 |
 |------|------|------|
@@ -116,9 +118,20 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   Lean 側はパラメータを「現在の規則活性化の第 k 引数」という 1 段の de Bruijn
   インデックスで表現し、単純な構造的置換 `MExp.subst` だけで capture-free になる
 - **スコープ**: `CallByName`＋`CallByValuePar`＋`CallByValueSeq`（macro_peg の
-  三戦略すべて）を形式化。別ユーティリティ `MacroExpander` 経由でのみ動作する
-  高階関数（ラムダ・カリー化）レイヤーのみ対象外——非停止性リスクのある構文的
-  インライン化パスでネイティブ機能ではない
+  三戦略すべて）と、高階関数レイヤーの「渡された callable を同じ呼び出しツリーの
+  中で即座に呼ぶ」部分（名前付きルール参照・ラムダリテラルの両方）を形式化。
+  **この境界線は当初の理解が不正確だった**——`docs/roadmap.md` に旧版が残る通り、
+  以前は「高階関数は参照実装の `Evaluator` でもネイティブ機能ではなく、別ユーティリティ
+  `MacroExpander`（非停止性リスクのある構文的インライン化パス）経由でしか動かない」
+  としてまるごとスコープ外にしていた。M-PEG-4着手時に参照実装（`Evaluator.scala`/
+  `MacroExpander.scala`/`Parser.scala`）を実機検証（`sbt console` で `MacroExpander`
+  を経由せず`Evaluator`だけを実行）した結果、これは誤りで、`Evaluator` は
+  `FUNS`/`bindings` を素通しする形で「渡された callable をその場で呼ぶ」を
+  **ネイティブに**サポートしていると判明した。`MacroExpander` が必須なのは
+  「クロージャを戻り値として返し、別の呼び出し元で改めて適用する」（真の環境捕獲）
+  の場合のみで、これは出荷テストに1件も存在しない。今回形式化したのはネイティブに
+  サポートされている前者のみ——後者（クロージャの戻り値適用）は非停止性リスクを
+  抱えたまま今回もスコープ外
 - **`callParArgFail` は証明が見つけた本物の設計バグだった**:
   `CallByValuePar` の「実引数のどれかが失敗したら呼び出し全体が失敗する」という
   規則の最初のドラフトは、`badArg ∈ args`（リストのどこかに失敗する引数がある）
@@ -148,6 +161,27 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   組み立てられるので、`motive_3` を `∃ q, input = q ++ final` という非自明な述語
   にして帰納法の仮定として運ぶ形にした——同じ「引数の補助関係」でも、位置を
   スレッディングするかどうかで証明に要求される情報量が変わる好例
+- **`.invoke` は当初「strategy 非依存」で設計したが、実装しながら誤りに気づいた**:
+  最初のプラン（コウタ承認済み）は「`.invoke` はどの `Strategy` でも同じ1規則で
+  済む」だったが、実際に `Semantics.lean` を書く段になって、これは「1つの導出は
+  1つの `Strategy` にコミットする」という既存の不変条件（`s` は導出全体で固定）
+  と矛盾すると気づいた——渡された callable 経由の呼び出しも、名前付きルール
+  経由の呼び出しと同じ規約で実引数を扱うべきである。`.call` と同じ3-way
+  （`invokeName*`/`invokePar*`/`invokeSeq*`）に設計し直し、既存の
+  `DerivesArgsPar`/`DerivesArgsSeq`/`evalArgsPar`/`evalArgsSeq` をそのまま
+  再利用した（新しい補助関係は不要——「どの `MExp` リストを評価するか」しか
+  気にしない設計だったので、呼び出し元が `.call` か `.invoke` かは無関係だった）
+- **`CallByValuePar`/`CallByValueSeq` 下のラムダ引数は、参照実装の退化挙動を
+  忠実に再現する設計にした**: 参照実装ではラムダ値は「入力を消費しないゼロ幅
+  マッチ」として評価されるため、Par/Seq 下でラムダを実引数に渡すと、実引数評価が
+  ゼロ幅マッチして消費文字列（空）が `.lit []` として束縛され、ラムダの中身が
+  丸ごと消えてしまう——この組み合わせは出荷テストに1つも存在しない、事実上
+  未定義の退化挙動である。今回は参照実装と食い違う「賢い」新仕様を作らず、この
+  退化を忠実に再現した：`.lam` は `.dbg` と同じ「無条件ゼロ幅成功」規則1本のみで、
+  `evalArgsPar`/`evalArgsSeq` には一切手を入れていない。結果として、退化した
+  `.lit []` を `.callParam`/`.invoke` で「呼ぼう」とすると、既存の
+  「整形式性仮定ゼロ」哲学（`.param` アウトオブレンジと同じ扱い）に従って
+  自動的に失敗する——特別なケース分けが一切不要だった
 - **`copy_gen` の一般化**: 帰納法は `u` に対して行うが、`Copy` の再帰呼び出しの実引数
   `w "a"` は call-by-name のため評価されず構文木のまま渡る（`.lit` に平坦化されない）。
   よって「アキュムレータは `.lit w` である」という形の帰納法は成立せず、`ExactMatch`

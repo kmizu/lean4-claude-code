@@ -215,6 +215,8 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
   case litFail str input hs => exact ⟨1, by simp [mpegRun, hs]⟩
   case dbg e input => exact ⟨1, by simp [mpegRun]⟩
   case paramFail k input => exact ⟨1, by simp [mpegRun]⟩
+  case lam ar bod input => exact ⟨1, by simp [mpegRun]⟩
+  case callParamFail k args input => exact ⟨1, by simp [mpegRun]⟩
   case callNameOk i args r input rest t hs hr ha hd ih =>
     subst hs
     obtain ⟨f, hf⟩ := ih
@@ -317,6 +319,96 @@ theorem mpegRun_complete {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char
     simp only [if_pos hbeq, hnone]
   case callMissing i args input hr => exact ⟨1, by simp [mpegRun, hr]⟩
   case callArity i args r input hr ha => exact ⟨1, by simp [mpegRun, hr, ha]⟩
+  case invokeNameOk ar bod args input rest t hs ha hd ih =>
+    subst hs
+    obtain ⟨f, hf⟩ := ih
+    refine ⟨f + 1, ?_⟩
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hf]
+  case invokeNameFail ar bod args input hs ha hd ih =>
+    subst hs
+    obtain ⟨f, hf⟩ := ih
+    refine ⟨f + 1, ?_⟩
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hf]
+  case invokeParOk ar bod args input rest vals t hs ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsPar_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case invokeParFail ar bod args input vals hs ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsPar_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case invokeParArgFail ar bod pre badArg post input preVals hs ha hpre hfail ihpre ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihpre
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsPar_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    have hnone := evalArgsPar_pre_succ_then_argFail pre badArg post hlA hlB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == (pre ++ badArg :: post).length) = true := by simpa using ha
+    simp only [if_pos hbeq, hnone]
+  case invokeSeqOk ar bod args input mid rest vals t hs ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case invokeSeqFail ar bod args input mid vals hs ha hargs hd ihargs ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihargs
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == args.length) = true := by simpa using ha
+    simp only [if_pos hbeq, hlA, hlB]
+  case invokeSeqArgFail ar bod pre badArg post input mid preVals hs ha hpre hfail ihpre ih =>
+    subst hs
+    obtain ⟨fA, hfA⟩ := ihpre
+    obtain ⟨fB, hfB⟩ := ih
+    refine ⟨max fA fB + 1, ?_⟩
+    have hlA := evalArgsSeq_mono_le (Nat.le_max_left fA fB) hfA
+    have hlB := mpegRun_mono_le (Nat.le_max_right fA fB) hfB
+    have hnone := evalArgsSeq_pre_succ_then_argFail pre badArg post hlA hlB
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : (ar == (pre ++ badArg :: post).length) = true := by simpa using ha
+    simp only [if_pos hbeq, hnone]
+  case invokeArity ar bod args input ha =>
+    refine ⟨1, ?_⟩
+    rw [mpegRun.eq_def]
+    dsimp only
+    have hbeq : ¬ (ar == args.length) = true := by simpa using ha
+    simp only [if_neg hbeq]
   case seqOk e₁ e₂ input rest₁ rest₂ t₁ t₂ h₁ h₂ ih₁ ih₂ =>
     obtain ⟨f₁, hf₁⟩ := ih₁
     obtain ⟨f₂, hf₂⟩ := ih₂

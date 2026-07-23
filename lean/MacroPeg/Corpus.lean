@@ -41,6 +41,20 @@ def mSeqCase (id : String) (input : String) : String × String :=
     (mpegRun seqFGrammar .callByValueSeq 500
       (.seq (.call seqFIdx [.lit ['a'], .lit ['b'], .lit ['c']]) (.notP .any)) input.toList))
 
+/-- `Double(Plus1, "aa") !.` (M-PEG-4, named-rule-as-value) — mirrors
+`doubleHofGrammar`'s `#guard` smoke tests in `Examples.lean`. -/
+def mHofDoubleCase (id : String) (input : String) : String × String :=
+  (id, renderMPeg
+    (mpegRun doubleHofGrammar .callByName 500
+      (.seq (.call doubleHofIdx [.lam 1 plus1Body, .lit ['a', 'a']]) (.notP .any)) input.toList))
+
+/-- `Map2((x,y -> x y x), "a", "b") !.` (M-PEG-4, lambda literal, arity 2) —
+mirrors `map2Grammar`'s `#guard` smoke tests in `Examples.lean`. -/
+def mHofMap2Case (id : String) (input : String) : String × String :=
+  (id, renderMPeg
+    (mpegRun map2Grammar .callByName 500
+      (.seq (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) (.notP .any)) input.toList))
+
 def mCases : List (String × String) :=
   [ mCase "300-mpeg-copy-empty" "",
     mCase "301-mpeg-copy-aa" "aa",
@@ -55,6 +69,11 @@ def mCases : List (String × String) :=
     mParCase "312-mpeg-par-f-reject-aa" "aa",
     mSeqCase "320-mpeg-seq-f-abcabc" "abcabc",
     mSeqCase "321-mpeg-seq-f-reject-abcabx" "abcabx",
-    mSeqCase "322-mpeg-seq-f-reject-abc" "abc" ]
+    mSeqCase "322-mpeg-seq-f-reject-abc" "abc",
+    mHofDoubleCase "330-mpeg-hof-double-aaaaaaaa" "aaaaaaaa",
+    mHofDoubleCase "331-mpeg-hof-double-reject-aaaa" "aaaa",
+    mHofMap2Case "332-mpeg-hof-map2-aba" "aba",
+    mHofMap2Case "333-mpeg-hof-map2-reject-abx" "abx",
+    mHofMap2Case "334-mpeg-hof-map2-reject-ab" "ab" ]
 
 end Shallot.MacroPeg

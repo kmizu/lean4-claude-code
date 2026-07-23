@@ -70,6 +70,28 @@ theorem mderives_suffix {g : MGrammar} {s : Strategy} {e : MExp} {x : List Char}
   case litFail _ _ _ => intro _ _ ho; cases ho
   case dbg e input => exact fun t r ho => ⟨[], by cases ho; simp⟩
   case paramFail _ _ => intro _ _ ho; cases ho
+  case lam ar bod input => exact fun t r ho => ⟨[], by cases ho; simp⟩
+  case callParamFail _ _ _ => intro _ _ ho; cases ho
+  case invokeNameOk ar bod args input rest t hs ha hd ih =>
+    intro t' r' ho
+    cases ho
+    exact ih t rest rfl
+  case invokeNameFail _ _ _ _ _ _ _ _ => intro _ _ ho; cases ho
+  case invokeParOk ar bod args input rest vals t hs ha hargs hd ihargs ih =>
+    intro t' r' ho
+    cases ho
+    exact ih t rest rfl
+  case invokeParFail _ _ _ _ _ _ _ _ _ _ _ => intro _ _ ho; cases ho
+  case invokeParArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ => intro _ _ ho; cases ho
+  case invokeSeqOk ar bod args input mid rest vals t hs ha hargs hd ihargs ih =>
+    intro t' r' ho
+    cases ho
+    obtain ⟨q, hq⟩ := ihargs
+    obtain ⟨p, hp⟩ := ih t rest rfl
+    exact ⟨q ++ p, by simp [hq, hp]⟩
+  case invokeSeqFail _ _ _ _ _ _ _ _ _ _ _ _ => intro _ _ ho; cases ho
+  case invokeSeqArgFail _ _ _ _ _ _ _ _ _ _ _ _ _ _ => intro _ _ ho; cases ho
+  case invokeArity _ _ _ _ _ => intro _ _ ho; cases ho
   case callNameOk i args r input rest t hs hr ha hd ih =>
     intro t' r' ho
     cases ho

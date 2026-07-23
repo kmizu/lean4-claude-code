@@ -19,21 +19,29 @@
 | M-PEG | kmizu/macro_peg の call-by-name 意味論を独立モジュール `MacroPeg/` として形式化（T0-T3＋headline定理）＋Lens抽出＋差分ハーネス | 監査green・`copy_language_ww` 全称量化・Lens抽出＋差分ハーネスgreen | ✅ 完了（T0-T3の5定理＋headline `copy_language_ww`、sorryゼロ。Lens抽出＋差分ハーネスもgreen、8ケース） |
 | M-PEG-2 | `MacroPeg/` に `Strategy`（`.callByName`/`.callByValuePar`）を追加し `MDerives`/`mpegRun` を retrofit。`CallByValuePar`（実引数を同一位置で独立評価）を形式化 | 既存8ケース無退行・T0-T3再証明green・Lens抽出＋差分ハーネス拡張green | ✅ 完了（`DerivesArgsPar`/`evalArgsPar` の mutual 拡張、T0-T3 retrofit、`callParArgFail` の設計バグを完全性証明の過程で発見・修正——`args = pre ++ badArg :: post` ＋ `pre` 成功の明示証拠が必要だった。Par版スモークテスト3ケース追加、既存8ケース無退行、`make verify` フルグリーン） |
 | M-PEG-3 | `MacroPeg/` に `Strategy.callByValueSeq` を追加し `MDerives`/`mpegRun` を retrofit。`CallByValueSeq`（実引数を左から逐次評価し入力位置をスレッディング、規則本体は最終位置から）を形式化 | 既存11ケース無退行・T0-T3再証明green・Lens抽出＋差分ハーネス拡張green | ✅ 完了（`DerivesArgsSeq`/`evalArgsSeq` の mutual 拡張、T0-T3 retrofit。`callSeqArgFail` は M-PEG-2 の `callParArgFail` バグの教訓を先回りで反映し設計段階から健全。P1 (`mderives_suffix`) は `callSeqOk` が最終スレッディング位置 `mid` から本体を導出するため `motive_3` を `∃ q, input = q ++ final` という非自明な述語にする必要があった。Seq版スモークテスト3ケース追加、既存11ケース無退行、`make verify` フルグリーン——三戦略すべて形式化完了） |
+| M-PEG-4 | `MacroPeg/` に高階関数レイヤーの一部（`.lam`/`.callParam`/`.invoke`）を追加。「渡された callable を同じ呼び出しツリーの中で即座に呼ぶ」パターン（名前付きルール参照・ラムダリテラルの両方）を形式化 | 既存14ケース無退行・T0-T3再証明green・Lens抽出＋差分ハーネス拡張green | ✅ 完了（参照実装の実機検証で「高階関数はEvaluatorのネイティブ機能ではない」という旧来の理解が誤りだったと判明——`MacroExpander`なしで`Evaluator`だけで出荷テスト全件が動くことを確認。`.lam`が名前付きルール参照とラムダリテラルを統一表現し、`.invoke`は`.call`と同じ3-way strategy分岐が必要と実装中に設計訂正（当初「strategy非依存」としていたプランが誤りだった）。Par/Seq下のラムダ引数は参照実装の退化挙動（ゼロ幅マッチ→空文字列）を忠実に再現。HOFスモークテスト5ケース追加（計19ケース）、既存14ケース無退行、`make verify`フルグリーン。真のクロージャ捕獲・戻り値適用（`MacroExpander`必須・非停止性リスクあり・出荷テスト0件）は引き続きスコープ外） |
 
 ## 未証明TODO（sorryの代わりにここに置く）
 
 （なし — 定理はここから「証明済み」へしか動かない）
 
-## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3）: 今回スコープ外にしたもの
+## Macro PEG（M-PEG 〜 M-PEG-4）: 今回スコープ外にしたもの
 
-kmizu/macro_peg の README/Scala実装を精読した上での意図的な絞り込み（詳細は
-`docs/theorems.md` の Macro PEG 節）。macro_peg の三戦略（`CallByName`/
-`CallByValuePar`/`CallByValueSeq`）はすべて形式化済み。残るスコープ外は：
+kmizu/macro_peg の README/Scala実装を精読・実機検証した上での意図的な絞り込み
+（詳細は `docs/theorems.md` の Macro PEG 節）。macro_peg の三戦略
+（`CallByName`/`CallByValuePar`/`CallByValueSeq`）と、高階関数レイヤーのうち
+「渡された callable を同じ呼び出しツリーの中で即座に呼ぶ」パターンは形式化済み。
+残るスコープ外は：
 
-- **高階関数レイヤー**（ラムダ `(x -> e)`・カリー化・第一級関数値）: 参照実装でも
-  Evaluator のネイティブ機能ではなく、別ユーティリティ `MacroExpander` による
-  「呼び出し前に全展開する」非停止性リスクのある構文的インライン化パス経由でしか
-  動かない（再帰マクロには使えない）。今回は「データ値としての式パラメータを取る
-  再帰マクロ」のみを対象とした
-- **解説ガイド新章**（`docs/guide/08-macro-peg.md` は M-PEG 時点の内容のまま。
-  `CallByValuePar`/`CallByValueSeq` 追加分の追記は独立の作業として提案する）
+- **クロージャの戻り値適用**（真の環境捕獲）: あるルール呼び出しがクロージャを
+  「戻り値」として返し、それを**別の**呼び出し元で改めて適用するパターン。
+  AST上は書けるが、参照実装でもこれを動かすには別ユーティリティ `MacroExpander`
+  （呼び出し前にグラマ全体を展開する、非停止性リスクのある構文的インライン化パス、
+  自己再帰する規則には使えない）が必須で、出荷テストスイートに1件もこのパターンの
+  テストが存在しない（M-PEG-4着手時に`sbt console`で実機確認済み）。旧版のこの
+  節は「高階関数レイヤーは丸ごとEvaluatorのネイティブ機能ではない」としていたが、
+  これは不正確だった——正しくは「クロージャの戻り値適用だけがネイティブ機能ではなく
+  `MacroExpander`必須」であり、それ以外の高階関数の使い方（M-PEG-4が形式化した
+  部分）はネイティブにサポートされている
+- **解説ガイド新章**（`docs/guide/08-macro-peg.md` への M-PEG-4 追記は独立の作業
+  として提案する。Par/Seq分の追記は既に反映済み）

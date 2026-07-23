@@ -80,6 +80,28 @@ Strategy only matters at `.call`:
   everything before it has actually finished threading, so a non-terminating
   earlier argument must never leave a later argument's failure derivable
   with no fuel witness ever realizing it.
+
+M-PEG-4 adds a bounded higher-order slice: `.lam` (a callable VALUE — zero
+-width success when evaluated directly, mirroring `.dbg`; see
+`MacroPeg/Syntax.lean`'s module docstring for why its body is never touched
+by an enclosing `subst`, hence no closures/capture), `.callParam` (raw,
+unsubstituted — mirrors `.param`'s `paramFail`: unconditional failure, since
+`subst` always eliminates a well-placed `.callParam` before it could ever
+reach a derivation), and `.invoke` (the resolved form `subst` produces when
+a `.callParam` finds a `.lam` at its target parameter). `.invoke` gets the
+SAME three-way `Strategy` split as `.call` — `invokeName*`/`invokePar*`/
+`invokeSeq*`, reusing `DerivesArgsPar`/`DerivesArgsSeq` as-is, since those
+relations only care about "which `MExp` list is being evaluated," not which
+kind of callee produced it. This mirrors `.call`'s split exactly rather than
+being strategy-independent, because a derivation commits to ONE `s` for its
+entire run (see above) — a call reached via a passed-in callable must honor
+that same commitment, not silently fall back to call-by-name argument
+passing regardless of `s`. The one thing `.invoke` does NOT need is
+`.call`'s `callMissing` case: `arity`/`body` are already in hand by
+construction (an `.invoke` is never "looked up," only produced by `subst`),
+so the only failure mode besides argument/body failure is `invokeArity`
+(the resolved lambda's declared arity doesn't match how many arguments it
+was actually applied to).
 -/
 
 namespace Shallot.MacroPeg
@@ -115,6 +137,64 @@ inductive MDerives (g : MGrammar) (s : Strategy) : MExp → List Char → MOutco
       MDerives g s (.dbg e) input (.ok .dbgT input)
   | paramFail (k : Nat) (input : List Char) :
       MDerives g s (.param k) input .fail
+  | lam (ar : Nat) (bod : MExp) (input : List Char) :
+      MDerives g s (.lam ar bod) input (.ok .lamT input)
+  | callParamFail (k : Nat) (args : List MExp) (input : List Char) :
+      MDerives g s (.callParam k args) input .fail
+  | invokeNameOk (ar : Nat) (bod : MExp) (args : List MExp) (input rest : List Char) (t : MTree)
+      (hs : s = .callByName)
+      (ha : ar = args.length)
+      (hd : MDerives g s (MExp.subst args bod) input (.ok t rest)) :
+      MDerives g s (.invoke ar bod args) input (.ok (.nodeInvoke t) rest)
+  | invokeNameFail (ar : Nat) (bod : MExp) (args : List MExp) (input : List Char)
+      (hs : s = .callByName)
+      (ha : ar = args.length)
+      (hd : MDerives g s (MExp.subst args bod) input .fail) :
+      MDerives g s (.invoke ar bod args) input .fail
+  | invokeParOk (ar : Nat) (bod : MExp) (args : List MExp) (input rest : List Char)
+      (vals : List MExp) (t : MTree)
+      (hs : s = .callByValuePar)
+      (ha : ar = args.length)
+      (hargs : DerivesArgsPar g s input args vals)
+      (hd : MDerives g s (MExp.subst vals bod) input (.ok t rest)) :
+      MDerives g s (.invoke ar bod args) input (.ok (.nodeInvoke t) rest)
+  | invokeParFail (ar : Nat) (bod : MExp) (args : List MExp) (input : List Char) (vals : List MExp)
+      (hs : s = .callByValuePar)
+      (ha : ar = args.length)
+      (hargs : DerivesArgsPar g s input args vals)
+      (hd : MDerives g s (MExp.subst vals bod) input .fail) :
+      MDerives g s (.invoke ar bod args) input .fail
+  | invokeParArgFail (ar : Nat) (bod : MExp) (pre : List MExp) (badArg : MExp) (post : List MExp)
+      (input : List Char) (preVals : List MExp)
+      (hs : s = .callByValuePar)
+      (ha : ar = (pre ++ badArg :: post).length)
+      (hpre : DerivesArgsPar g s input pre preVals)
+      (hfail : MDerives g s badArg input .fail) :
+      MDerives g s (.invoke ar bod (pre ++ badArg :: post)) input .fail
+  | invokeSeqOk (ar : Nat) (bod : MExp) (args : List MExp) (input mid rest : List Char)
+      (vals : List MExp) (t : MTree)
+      (hs : s = .callByValueSeq)
+      (ha : ar = args.length)
+      (hargs : DerivesArgsSeq g s input args vals mid)
+      (hd : MDerives g s (MExp.subst vals bod) mid (.ok t rest)) :
+      MDerives g s (.invoke ar bod args) input (.ok (.nodeInvoke t) rest)
+  | invokeSeqFail (ar : Nat) (bod : MExp) (args : List MExp) (input mid : List Char)
+      (vals : List MExp)
+      (hs : s = .callByValueSeq)
+      (ha : ar = args.length)
+      (hargs : DerivesArgsSeq g s input args vals mid)
+      (hd : MDerives g s (MExp.subst vals bod) mid .fail) :
+      MDerives g s (.invoke ar bod args) input .fail
+  | invokeSeqArgFail (ar : Nat) (bod : MExp) (pre : List MExp) (badArg : MExp) (post : List MExp)
+      (input mid : List Char) (preVals : List MExp)
+      (hs : s = .callByValueSeq)
+      (ha : ar = (pre ++ badArg :: post).length)
+      (hpre : DerivesArgsSeq g s input pre preVals mid)
+      (hfail : MDerives g s badArg mid .fail) :
+      MDerives g s (.invoke ar bod (pre ++ badArg :: post)) input .fail
+  | invokeArity (ar : Nat) (bod : MExp) (args : List MExp) (input : List Char)
+      (ha : ar ≠ args.length) :
+      MDerives g s (.invoke ar bod args) input .fail
   | callNameOk (i : Nat) (args : List MExp) (r : MRule) (input rest : List Char) (t : MTree)
       (hs : s = .callByName)
       (hr : ruleAtM g.rules i = some r)

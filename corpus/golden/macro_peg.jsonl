@@ -12,3 +12,8 @@
 {"case":"320-mpeg-seq-f-abcabc","phase":"eval","status":"ok","result":"ok+0"}
 {"case":"321-mpeg-seq-f-reject-abcabx","phase":"eval","status":"ok","result":"fail"}
 {"case":"322-mpeg-seq-f-reject-abc","phase":"eval","status":"ok","result":"fail"}
+{"case":"330-mpeg-hof-double-aaaaaaaa","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"331-mpeg-hof-double-reject-aaaa","phase":"eval","status":"ok","result":"fail"}
+{"case":"332-mpeg-hof-map2-aba","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"333-mpeg-hof-map2-reject-abx","phase":"eval","status":"ok","result":"fail"}
+{"case":"334-mpeg-hof-map2-reject-ab","phase":"eval","status":"ok","result":"fail"}

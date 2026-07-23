@@ -249,6 +249,59 @@ theorem mpegRun_mono {g : MGrammar} {s : Strategy} {f : Nat} {e : MExp} {x : Lis
         | ok t r => exact h
         | fail => exact h
     | dbg e => exact h
+    | lam ar bod => exact h
+    | callParam k args => exact h
+    | invoke ar bod args =>
+      dsimp only at h ⊢
+      by_cases hbeq : (ar == args.length) = true
+      · simp only [if_pos hbeq] at h ⊢
+        cases s with
+        | callByName =>
+          dsimp only at h ⊢
+          cases h1 : mpegRun g .callByName f (MExp.subst args bod) x with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            rw [ih h1]
+            exact h
+        | callByValuePar =>
+          dsimp only at h ⊢
+          cases h1 : evalArgsPar g .callByValuePar f x args with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            rw [evalArgsPar_mono_of_mpegRun_mono (@ih) h1]
+            cases o1 with
+            | none => exact h
+            | some vals =>
+              dsimp only at h ⊢
+              cases h2 : mpegRun g .callByValuePar f (MExp.subst vals bod) x with
+              | none => rw [h2] at h; exact absurd h (by simp)
+              | some o2 =>
+                rw [h2] at h
+                rw [ih h2]
+                exact h
+        | callByValueSeq =>
+          dsimp only at h ⊢
+          cases h1 : evalArgsSeq g .callByValueSeq f x args with
+          | none => rw [h1] at h; exact absurd h (by simp)
+          | some o1 =>
+            rw [h1] at h
+            rw [evalArgsSeq_mono_of_mpegRun_mono (@ih) h1]
+            cases o1 with
+            | none => exact h
+            | some p =>
+              cases p with
+              | mk vals mid =>
+                dsimp only at h ⊢
+                cases h2 : mpegRun g .callByValueSeq f (MExp.subst vals bod) mid with
+                | none => rw [h2] at h; exact absurd h (by simp)
+                | some o2 =>
+                  rw [h2] at h
+                  rw [ih h2]
+                  exact h
+      · simp only [if_neg hbeq] at h ⊢
+        exact h
 
 theorem mpegRun_mono_le {g : MGrammar} {s : Strategy} {f f' : Nat} {e : MExp} {x : List Char} {o : MOutcome}
     (hle : f ≤ f') (h : mpegRun g s f e x = some o) : mpegRun g s f' e x = some o := by
