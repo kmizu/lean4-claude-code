@@ -338,7 +338,126 @@ seen here: getting the shape of "the whole call fails if any one argument
 does" right, and how threading the position changes what information the
 proof needs.
 
-## 8.6 Lens extraction and the differential harness
+## 8.6 Formalizing a slice of the higher-order layer — and catching a prior scoping mistake
+
+Up to this point, this chapter (and earlier versions of it, and
+`docs/roadmap.md`) scoped out macro_peg's entire higher-order layer
+(lambdas, passing named rules as values). The reason given was: "even the
+reference `Evaluator` doesn't support it natively — it only works through
+a separate utility, `MacroExpander`, an eager whole-grammar inlining pass
+that carries a non-termination risk." **That understanding was wrong.**
+
+### What re-reading the reference implementation turned up
+
+When the time actually came to tackle the higher-order layer, we re-read
+`Evaluator.scala`/`MacroExpander.scala`/`Parser.scala` closely and verified
+against the running code via `sbt console`. What we found:
+
+- `Evaluator.scala` already supports invoking a callable bound to a
+  parameter (whether a named-rule reference or a lambda literal) from
+  inside the same call — NATIVELY — via `FUNS` (a map from rule names to
+  `Function` values) threaded through `bindings`. Calling `Evaluator`
+  directly, skipping `MacroExpander.expandGrammar` entirely, reproduces
+  all six shipped higher-order tests' results bit-for-bit
+- `MacroExpander` is genuinely load-bearing for exactly one pattern: a rule
+  call returning a closure as a VALUE, later applied from a DIFFERENT call
+  site — true environment capture. This is expressible in the AST but has
+  zero shipped test coverage. A hand-written test exercising it (something
+  like `MakeAdder(x: ?) = (y -> x y); UseCurried(f: ?, y: ?) = f(y);`,
+  returning a closure and applying it elsewhere) reliably crashes with a
+  `ClassCastException` when `MacroExpander` is skipped
+- The test claiming to exercise currying (`Curry(f: ?) = (x -> (y -> f(x,
+  y)))`, invoked as `Curry((x,y->x y))("a")("b")`) turns out to be
+  misnamed. `Call`'s grammar production only accepts `identifier(args)` —
+  there is no syntax for chaining another application onto an arbitrary
+  result — so `Curry(...)` just zero-width-matches as a lambda value, and
+  the trailing `("a")("b")` are parsed as plain string-literal sequencing,
+  not application. No currying and no application ever actually happens
+
+So the pattern "invoke a passed-in callable from inside the same call
+tree" can be formalized natively, with no non-termination risk — that's
+the starting point for the M-PEG-4 milestone.
+
+### `.lam` / `.callParam` / `.invoke`
+
+This project has no `.peg` surface parser — `Examples.lean` builds `MExp`
+terms directly in Lean. So "pass a named rule as a value" and "pass a
+lambda literal" don't even need to be distinguished — both reduce to the
+same `.lam arity body` shape:
+
+```lean
+| lam (arity : Nat) (body : MExp)
+| callParam (k : Nat) (args : List MExp)
+| invoke (arity : Nat) (body : MExp) (args : List MExp)
+```
+
+`.lam` is a callable value, evaluated as an unconditional zero-width
+success exactly like `.dbg` (values don't consume input). Its `body`'s
+`.param` references are relative to the lambda's own scope, independent of
+the enclosing rule's — every shipped lambda literal is self-contained (no
+free-variable capture), so `subst` treats `.lam` as a LEAF, exactly like
+`.lit`, never recursing into it. That's what makes the absence of capture
+structural rather than conventional.
+
+`.callParam k args` is the syntax "invoke the callable bound to the
+current rule's k-th actual parameter, with these args" — what
+`Examples.lean` writes directly. `subst` always resolves it: if `.param
+k`'s position holds a `.lam ar bod`, it rewrites to `.invoke ar bod
+(the substituted args)`; otherwise (a type mismatch, or out of range) it
+collapses to `MExp.failAlways`, the same fallback an out-of-range `.param`
+already uses.
+
+`.invoke` is nearly isomorphic to `.call`, except `body`/`arity` are
+already in hand rather than looked up in the grammar's rule table. **One
+design correction happened while implementing it**: the original plan was
+"`.invoke` needs only one rule, regardless of `Strategy`" — but that
+contradicts the existing invariant that a single derivation commits to ONE
+`Strategy` for its entire run. A call reached through a passed-in callable
+should honor the same argument-passing convention as a call reached
+through a named rule. We redesigned it with the same three-way split as
+`.call` (`invokeNameOk`/`Fail`, `invokeParOk`/`Fail`/`ArgFail`,
+`invokeSeqOk`/`Fail`/`ArgFail`, `invokeArity`), reusing the existing
+`DerivesArgsPar`/`DerivesArgsSeq`/`evalArgsPar`/`evalArgsSeq` as-is — no
+new auxiliary relations were needed.
+
+### `CallByValuePar`/`CallByValueSeq` faithfully reproduce a degenerate reference behavior for lambda arguments
+
+Because the reference implementation evaluates a lambda VALUE as a
+zero-width match when it's matched directly, passing a lambda as an actual
+parameter under `CallByValuePar`/`CallByValueSeq` makes argument evaluation
+zero-width-match it too — the consumed substring (empty) is what gets
+bound as the value, and **the lambda's actual content vanishes,
+indistinguishable from passing an empty string**. This combination has
+zero shipped test coverage — it's genuinely undefined, degenerate
+behavior.
+
+Rather than invent a smarter new semantics that diverges from the
+reference, we chose to faithfully reproduce this degeneration. `.lam` is a
+single "unconditional zero-width success" rule, exactly like `.dbg`, and
+`evalArgsPar`/`evalArgsSeq` were left completely untouched. If the
+resulting degenerate value (`.lit []`) is later "invoked" via
+`.callParam`/`.invoke`, it automatically fails under the existing
+zero-well-formedness-assumptions discipline (the same treatment an
+out-of-range `.param` already gets) — no special-casing was needed at all.
+
+### Extending T0–T3, and smoke tests
+
+Extending the proof files (`Fuel`/`Props`/`Soundness`/`Determinism`/
+`Completeness`) was largely mechanical, since each `.invoke` case is nearly
+isomorphic to its `.call` counterpart. `invokeParArgFail`/
+`invokeSeqArgFail` were designed from the start with the lesson M-PEG-2's
+`callParArgFail` learned mid-completeness-proof (the `args = pre ++ badArg
+:: post` + explicit `pre`-success-witnessed shape) already baked in, so no
+rework was needed this time.
+
+`Examples.lean` gained two smoke tests: a named-rule-reference pattern
+(mirroring `Double(Plus1, "aa")` — `Double(f,s) = f(f(s))` doubles `"aa"`
+twice into `"aaaaaaaa"`) and a multi-argument lambda-literal pattern
+(mirroring `Map2((x,y -> x y x), "a", "b")` — matches `"a" ++ "b" ++ "a"` =
+`"aba"`). Both `#guard`s passed on the first try, confirming the
+hand-traced derivations were correct.
+
+## 8.7 Lens extraction and the differential harness
 
 Since `mpegRun` is fuel-based structural recursion isomorphic in shape to
 `pegRun`, the extractor Lens's equation-lemma route went through as-is,
@@ -347,29 +466,31 @@ existing whitelist. Writing the arity check as Prop's `≠` (via
 `Decidable`) fails extraction, because `instDecidableNot` isn't registered
 in Lens's built-in table. Rewriting it to use Bool's `==` instead, in the
 same style as `beqChar`/`leChar`, made it go through — the same pattern
-that `.chr`/`.range` already follow.
+that `.chr`/`.range` already follow (and the same pattern `.invoke`'s
+arity check reuses directly).
 
 The differential harness also follows the existing design as-is. The
 `shallot-cli macro-dump` subcommand runs the extracted `MacroPeg_mpegRun`
-against a single `MacroPeg_mCases` table (holding witnesses for all three
-strategies together), and `make verify` continuously checks three-way
-agreement — Lean-native execution ≡ golden ≡ extracted-Scala execution —
-against `corpus/golden/macro_peg.jsonl` (8 `CallByName` cases, 3
-`CallByValuePar` cases, 3 `CallByValueSeq` cases — 14 total). Adding each
-new strategy left the three-way-agreement machinery itself untouched — a
-new `Strategy` just means new rows in `MacroPeg_mCases`.
+against a single `MacroPeg_mCases` table (holding witnesses for every
+strategy and feature together), and `make verify` continuously checks
+three-way agreement — Lean-native execution ≡ golden ≡ extracted-Scala
+execution — against `corpus/golden/macro_peg.jsonl` (8 `CallByName` cases,
+3 `CallByValuePar` cases, 3 `CallByValueSeq` cases, 5 higher-order cases —
+19 total). Adding each new feature left the three-way-agreement machinery
+itself untouched — a new constructor just means new rows in
+`MacroPeg_mCases`.
 
-## 8.7 What was left out of scope this time
+## 8.8 What was left out of scope this time
 
-- **The higher-order function layer** (lambdas `(x -> e)`, currying,
-  first-class function values): even in the reference implementation, this
-  isn't a native feature of `Evaluator`; it only works through a separate
-  utility, `MacroExpander`, via a syntactic inlining pass that "expands
-  everything before the call," which carries a non-termination risk (and
-  can't be used with recursive macros). This time, we scoped the work to
-  the core that backs macro_peg's headline expressive-power claim —
-  recursive macros that take expression parameters as data values — across
-  all three evaluation strategies
+- **Closures returned as values, applied elsewhere** (true environment
+  capture): a rule call returning a closure as a VALUE, later applied from
+  a DIFFERENT call site. This is expressible in the AST, but even in the
+  reference implementation it requires `MacroExpander` (an eager
+  whole-grammar inlining pass that carries a non-termination risk and
+  can't be used with self-recursive rules), and has zero shipped test
+  coverage (verified directly in 8.6). Every other way of using higher-
+  order functions — invoking a passed-in callable from inside the same
+  call tree that received it — is fully formalized in this chapter
 
 ---
 
