@@ -192,3 +192,17 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   補題が要ることも判明した。証明を書く前は自明に見えた命題が、実際に書いてみると
   暗黙の前提（アルファベット制限・長さ下界）を要求してくる——このプロジェクトで
   何度も見た形の発見がここでも起きた
+- **「クロージャの戻り値適用」は実は M-PEG-4 の範囲内だった（M-PEG-5 検討時に判明）**:
+  上のスコープ記述は「参照実装でも `MacroExpander` なしでは `ClassCastException` で
+  クラッシュする」としていたが、`Evaluator.scala`/`Interpreter.scala` を実機再検証
+  （`sbt console`）したところ、これは不正確だった——`Interpreter` はそもそも
+  `MacroExpander` を一切呼ばず、この構成（`Baz(f: ?) = f; Apply(f: ?, s: ?) = f(s);
+  S = Apply(Baz((x -> x)), "a")`）はクラッシュせず、決定的に `Failure` を返す。
+  これは `.callParam` の `subst` が既に持っている「解決先が `.lam` でなければ
+  `MExp.failAlways`」というフォールバック（`MacroPeg/Syntax.lean`）とそのまま一致する
+  ——`CallByName` の下で `Apply` の `f` に束縛されるのは `Baz(...)` という未評価の
+  `.call` 式であって `.lam` ではないため。新しい `MExp` コンストラクタも新しい証明も
+  不要で、`Examples.lean`/`Corpus.lean` の `closureReturnGrammar`（corpus ID
+  `335-mpeg-hof-return-reject-a`）が計算による確認として追加されている。真に
+  未形式化のまま残るのは、`MacroExpander` の全展開が実際に成功させるケース（後述）
+  だけ

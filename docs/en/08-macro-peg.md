@@ -475,8 +475,8 @@ against a single `MacroPeg_mCases` table (holding witnesses for every
 strategy and feature together), and `make verify` continuously checks
 three-way agreement — Lean-native execution ≡ golden ≡ extracted-Scala
 execution — against `corpus/golden/macro_peg.jsonl` (8 `CallByName` cases,
-3 `CallByValuePar` cases, 3 `CallByValueSeq` cases, 5 higher-order cases —
-19 total). Adding each new feature left the three-way-agreement machinery
+3 `CallByValuePar` cases, 3 `CallByValueSeq` cases, 6 higher-order cases —
+20 total). Adding each new feature left the three-way-agreement machinery
 itself untouched — a new constructor just means new rows in
 `MacroPeg_mCases`.
 
@@ -488,9 +488,36 @@ itself untouched — a new constructor just means new rows in
   reference implementation it requires `MacroExpander` (an eager
   whole-grammar inlining pass that carries a non-termination risk and
   can't be used with self-recursive rules), and has zero shipped test
-  coverage (verified directly in 8.6). Every other way of using higher-
+  coverage (verified directly in 8.6 — though the "crashes" verdict from
+  that verification is corrected in 8.9). Every other way of using higher-
   order functions — invoking a passed-in callable from inside the same
   call tree that received it — is fully formalized in this chapter
+
+## 8.9 One more correction — the closure-return pattern turned out to already be formalized
+
+While scoping the next milestone (M-PEG-5), re-verifying against the
+reference implementation overturned what 8.6/8.8 said: that closure-return-
+and-reapply "crashes with a `ClassCastException`" without `MacroExpander`.
+
+Evaluating `Baz(f: ?) = f; Apply(f: ?, s: ?) = f(s); S = Apply(Baz((x ->
+x)), "a")` directly through `Evaluator` alone via `sbt console` doesn't
+crash at all — it returns a clean, deterministic `Failure`. As it turns
+out, `Interpreter` never calls `MacroExpander` in the first place (the
+commit titled "hide `MacroExpander` inside `Interpreter`" turned out not to
+actually call it — another thing this re-verification surfaced).
+
+This is exactly the behavior `.callParam`'s `subst` (`MacroPeg/Syntax.lean`)
+already had, by construction: under `CallByName`, whatever gets bound to
+`Apply`'s `f` is the unevaluated `.call` expression `Baz(...)`, not a
+`.lam` — so `.callParam` falls through to its existing `MExp.failAlways`
+fallback. No new constructor, no new proof rule — just a smoke test added
+to `Examples.lean`/`Corpus.lean` (corpus ID `335-mpeg-hof-return-reject-a`)
+to make the fact machine-checked.
+
+So M-PEG-4 already correctly formalized more ground than we thought. What
+genuinely remains unformalized is the case where `MacroExpander`'s eager
+whole-grammar inlining actually SUCCEEDS — safe and terminating whenever
+the macro-call graph is acyclic — and that's what M-PEG-5 targets.
 
 ---
 

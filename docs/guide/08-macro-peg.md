@@ -390,8 +390,8 @@ Bool の `==` を使うよう書き換えると通りました——`.chr`/`.ran
 差分ハーネスも既存の設計をそのまま踏襲しています。`shallot-cli macro-dump` サブコマンドが
 抽出済み `MacroPeg_mpegRun` を、単一の `MacroPeg_mCases` テーブル（全戦略・全機能ぶんの
 witness をまとめて持つ）に対して実行し、`corpus/golden/macro_peg.jsonl`
-（`CallByName` 8 件・`CallByValuePar` 3 件・`CallByValueSeq` 3 件・高階関数 5 件、
-計 19 件）に対して Lean ネイティブ実行 ≡ golden ≡ Scala 抽出実行の 3 方一致を
+（`CallByName` 8 件・`CallByValuePar` 3 件・`CallByValueSeq` 3 件・高階関数 6 件、
+計 20 件）に対して Lean ネイティブ実行 ≡ golden ≡ Scala 抽出実行の 3 方一致を
 `make verify` の中で常時検査します。新しい機能を足すたびに、この 3 方一致の仕組み
 自体には手を入れていません——コンストラクタが増えても `MacroPeg_mCases` に行を
 足すだけです。
@@ -403,8 +403,34 @@ witness をまとめて持つ）に対して実行し、`corpus/golden/macro_peg
   書けますが、参照実装でもこれを動かすには `MacroExpander`（呼び出し前に全展開
   する、非停止性リスクのある構文的インライン化パス、自己再帰する規則には使えない）
   が必須で、出荷テストスイートに 1 件もこのパターンのテストが存在しません
-  （8.6 で実機確認済み）。それ以外の高階関数の使い方——渡された callable を同じ
-  呼び出しツリーの中で即座に呼ぶパターン——はこの章ですべて形式化しました
+  （8.6 で実機確認済み。ただし「クラッシュする」という当時の結論は 8.9 で訂正して
+  います）。それ以外の高階関数の使い方——渡された callable を同じ呼び出しツリー
+  の中で即座に呼ぶパターン——はこの章ですべて形式化しました
+
+## 8.9 もう一つの訂正——クロージャ戻り値パターンは実は形式化済みだった
+
+次のマイルストーン（M-PEG-5）を検討する過程で、8.6/8.8 に書いた「クロージャの
+戻り値適用は `MacroExpander` なしでは `ClassCastException` でクラッシュする」
+という記述を、参照実装の再検証で覆すことになりました。
+
+`Baz(f: ?) = f; Apply(f: ?, s: ?) = f(s); S = Apply(Baz((x -> x)), "a")` を
+`sbt console` で `Evaluator` だけを使って直接評価したところ、クラッシュせず、
+決定的に `Failure` を返しました。そもそも `Interpreter` クラスは `MacroExpander`
+を一度も呼んでいません（「`MacroExpander` を `Interpreter` の内部に隠す」という
+コミット名の実装が、実は `MacroExpander` を呼んでいなかった、というのも今回
+分かったことの一つです）。
+
+これは実は `.callParam` の `subst`（`MacroPeg/Syntax.lean`）が最初から正しく
+持っていた挙動でした。`CallByName` の下で `Apply` の `f` に束縛されるのは
+`Baz(...)` という未評価の `.call` 式であって `.lam` ではないので、`.callParam`
+は既存のフォールバックで `MExp.failAlways` に落ちます。新しいコンストラクタも
+新しい証明ルールも要らず、`Examples.lean`/`Corpus.lean` にこの事実を確認する
+スモークテスト（corpus ID `335-mpeg-hof-return-reject-a`）を 1 件追加しただけです。
+
+つまり M-PEG-4 は、当初考えていたよりも広い範囲を最初から正しく形式化できて
+いました。本当に未形式化のまま残っているのは、`MacroExpander` の全展開が実際に
+**成功させる**ケース——マクロ呼び出しのグラフが非循環なら安全に停止する——であり、
+これが M-PEG-5 の対象です。
 
 ---
 

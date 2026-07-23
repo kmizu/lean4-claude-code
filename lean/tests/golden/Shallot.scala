@@ -656,6 +656,21 @@ def MacroPeg_argAt(x0: List[MacroPeg_MExp], x1: BigInt): Option[MacroPeg_MExp] =
     case ((head :: as), _g0) if _g0 >= 1 => { val n = _g0 - 1; MacroPeg_argAt(as, n) }
   })
 
+def MacroPeg_closureReturnApplyBody: MacroPeg_MExp =
+  MacroPeg_MExp.callParam(BigInt(0), (MacroPeg_MExp.param(BigInt(1)) :: Nil))
+
+def MacroPeg_closureReturnApplyIdx: BigInt =
+  BigInt(1)
+
+def MacroPeg_closureReturnBazBody: MacroPeg_MExp =
+  MacroPeg_MExp.param(BigInt(0))
+
+def MacroPeg_closureReturnBazIdx: BigInt =
+  BigInt(0)
+
+def MacroPeg_closureReturnGrammar: MacroPeg_MGrammar =
+  MacroPeg_MGrammar((MacroPeg_MRule(BigInt(1), MacroPeg_closureReturnBazBody) :: (MacroPeg_MRule(BigInt(2), MacroPeg_closureReturnApplyBody) :: Nil)))
+
 def MacroPeg_copyBody: MacroPeg_MExp =
   MacroPeg_MExp.alt(MacroPeg_MExp.seq(MacroPeg_MExp.chr(BigInt(0x61)), MacroPeg_MExp.call(MacroPeg_copyIdx, (MacroPeg_MExp.seq(MacroPeg_MExp.param(BigInt(0)), MacroPeg_MExp.chr(BigInt(0x61))) :: Nil))), MacroPeg_MExp.alt(MacroPeg_MExp.seq(MacroPeg_MExp.chr(BigInt(0x62)), MacroPeg_MExp.call(MacroPeg_copyIdx, (MacroPeg_MExp.seq(MacroPeg_MExp.param(BigInt(0)), MacroPeg_MExp.chr(BigInt(0x62))) :: Nil))), MacroPeg_MExp.param(BigInt(0))))
 
@@ -706,13 +721,16 @@ def MacroPeg_mCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_copyGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_copyIdx, (MacroPeg_MExp.lit(Nil) :: Nil)), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mCases: List[(String, String)] =
-  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: (MacroPeg_mHofDoubleCase("330-mpeg-hof-double-aaaaaaaa", "aaaaaaaa") :: (MacroPeg_mHofDoubleCase("331-mpeg-hof-double-reject-aaaa", "aaaa") :: (MacroPeg_mHofMap2Case("332-mpeg-hof-map2-aba", "aba") :: (MacroPeg_mHofMap2Case("333-mpeg-hof-map2-reject-abx", "abx") :: (MacroPeg_mHofMap2Case("334-mpeg-hof-map2-reject-ab", "ab") :: Nil)))))))))))))))))))
+  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: (MacroPeg_mHofDoubleCase("330-mpeg-hof-double-aaaaaaaa", "aaaaaaaa") :: (MacroPeg_mHofDoubleCase("331-mpeg-hof-double-reject-aaaa", "aaaa") :: (MacroPeg_mHofMap2Case("332-mpeg-hof-map2-aba", "aba") :: (MacroPeg_mHofMap2Case("333-mpeg-hof-map2-reject-abx", "abx") :: (MacroPeg_mHofMap2Case("334-mpeg-hof-map2-reject-ab", "ab") :: (MacroPeg_mHofReturnCase("335-mpeg-hof-return-reject-a", "a") :: Nil))))))))))))))))))))
 
 def MacroPeg_mHofDoubleCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_doubleHofGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_doubleHofIdx, (MacroPeg_MExp.lam(BigInt(1), MacroPeg_plus1Body) :: (MacroPeg_MExp.lit((BigInt(0x61) :: (BigInt(0x61) :: Nil))) :: Nil))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mHofMap2Case(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_map2Grammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_map2Idx, (MacroPeg_MExp.lam(BigInt(2), MacroPeg_xyxBody) :: (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x62) :: Nil)) :: Nil)))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
+
+def MacroPeg_mHofReturnCase(id: String, input: String): (String, String) =
+  (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_closureReturnGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_closureReturnApplyIdx, (MacroPeg_MExp.call(MacroPeg_closureReturnBazIdx, (MacroPeg_MExp.lam(BigInt(1), MacroPeg_MExp.param(BigInt(0))) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: Nil))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mParCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_parFGrammar, MacroPeg_Strategy.callByValuePar(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_parFIdx, (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: Nil)), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))

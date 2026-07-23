@@ -55,6 +55,15 @@ def mHofMap2Case (id : String) (input : String) : String × String :=
     (mpegRun map2Grammar .callByName 500
       (.seq (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) (.notP .any)) input.toList))
 
+/-- `Apply(Baz((x -> x)), "a") !.` (closure returned from `Baz` then
+reapplied inside `Apply` — always fails) — mirrors `closureReturnGrammar`'s
+`#guard` smoke test in `Examples.lean`. -/
+def mHofReturnCase (id : String) (input : String) : String × String :=
+  (id, renderMPeg
+    (mpegRun closureReturnGrammar .callByName 500
+      (.seq (.call closureReturnApplyIdx
+        [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]) (.notP .any)) input.toList))
+
 def mCases : List (String × String) :=
   [ mCase "300-mpeg-copy-empty" "",
     mCase "301-mpeg-copy-aa" "aa",
@@ -74,6 +83,7 @@ def mCases : List (String × String) :=
     mHofDoubleCase "331-mpeg-hof-double-reject-aaaa" "aaaa",
     mHofMap2Case "332-mpeg-hof-map2-aba" "aba",
     mHofMap2Case "333-mpeg-hof-map2-reject-abx" "abx",
-    mHofMap2Case "334-mpeg-hof-map2-reject-ab" "ab" ]
+    mHofMap2Case "334-mpeg-hof-map2-reject-ab" "ab",
+    mHofReturnCase "335-mpeg-hof-return-reject-a" "a" ]
 
 end Shallot.MacroPeg

@@ -17,3 +17,4 @@
 {"case":"332-mpeg-hof-map2-aba","phase":"eval","status":"ok","result":"ok+0"}
 {"case":"333-mpeg-hof-map2-reject-abx","phase":"eval","status":"ok","result":"fail"}
 {"case":"334-mpeg-hof-map2-reject-ab","phase":"eval","status":"ok","result":"fail"}
+{"case":"335-mpeg-hof-return-reject-a","phase":"eval","status":"ok","result":"fail"}

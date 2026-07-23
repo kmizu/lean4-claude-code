@@ -470,4 +470,52 @@ def map2Grammar : MGrammar := { rules := [{ arity := 3, body := map2Body }] }
   (mpegRun map2Grammar .callByName 200
     (.call map2Idx [.lam 2 xyxBody, .lit ['a'], .lit ['b']]) "ab".toList) == "fail"
 
+/-! ## Closure returned then reapplied elsewhere — already handled, no new work
+
+`docs/roadmap.md`/`docs/theorems.md` scoped "a rule returns a callable as ITS
+OWN result, and a DIFFERENT call site applies it" out of M-PEG-4, on the
+belief that the reference `Evaluator` cannot do this at all without the
+separate `MacroExpander` utility, and crashes (`ClassCastException`) if you
+try anyway. Re-verified against the CURRENT `Evaluator.scala`/
+`Interpreter.scala` (which turns out not to call `MacroExpander` at all —
+`Interpreter` only ever constructs a plain `Evaluator`): the actual behavior,
+confirmed via `sbt console`, is a clean, deterministic parse `Failure`, never
+a crash. That is exactly what `.callParam`'s existing `subst` fallback
+already gives for free (`MacroPeg/Syntax.lean`): under `CallByName`, the
+value bound to a call target is whatever UNEVALUATED expression the caller
+passed, so if a rule merely forwards its own parameter (`Baz(f: ?) = f`,
+i.e. body `.param 0`) as an argument to another call, the receiving
+parameter is bound to the unreduced `.call` node, never a `.lam` — and
+`.callParam` can only resolve that to `MExp.failAlways`. No new `MExp`
+constructor and no new proof rule were needed; this section exists only to
+make that consequence explicit and machine-checked. -/
+
+/-- `Baz(f: ?) = f; Apply(f: ?, s: ?) = f(s); S = Apply(Baz((x -> x)), "a")`
+— mirrors `HigherOrderReturnSpec.scala`'s grammar (which in the reference
+suite only exercises the TYPE checker — `checker.check().isRight` — never
+the evaluator). `Baz` forwards its parameter unevaluated (`.param 0`);
+`Apply` invokes its own parameter `f` via `.callParam`. Under `CallByName`,
+`Apply`'s actual argument for `f` is the unevaluated expression
+`.call closureReturnBazIdx [.lam 1 (.param 0)]` — a `.call`, not a `.lam` —
+so `.callParam`'s `subst` falls straight to `MExp.failAlways`, regardless of
+what `Baz` was called with or what `Apply`'s second argument is. -/
+def closureReturnBazBody : MExp := .param 0
+
+/-- `Apply(f: ?, s: ?) = f(s)`, i.e. `callParam 0 [param 1]`. -/
+def closureReturnApplyBody : MExp := .callParam 0 [.param 1]
+
+def closureReturnGrammar : MGrammar :=
+  { rules := [ { arity := 1, body := closureReturnBazBody },
+               { arity := 2, body := closureReturnApplyBody } ] }
+
+def closureReturnBazIdx : Nat := 0
+def closureReturnApplyIdx : Nat := 1
+
+/-! Always fails — `Baz`'s result never becomes a `.lam` before `Apply` tries
+to invoke it. -/
+#guard renderMPeg
+  (mpegRun closureReturnGrammar .callByName 200
+    (.call closureReturnApplyIdx
+      [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]) "a".toList) == "fail"
+
 end Shallot.MacroPeg
