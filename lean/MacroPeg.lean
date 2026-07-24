@@ -1,4 +1,5 @@
 import MacroPeg.Syntax
+import MacroPeg.PegEmbed
 import MacroPeg.CallGraph
 import MacroPeg.Expand
 import MacroPeg.Semantics

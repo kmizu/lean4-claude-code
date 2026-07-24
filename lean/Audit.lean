@@ -13,7 +13,9 @@ import Shallot.Peg.Fuel
 import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
+import Shallot.Peg.Examples
 import MacroPeg
+import Cfg
 
 /-!
 # Axiom audit
@@ -187,3 +189,35 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.MacroPeg.copy_language_ww' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.MacroPeg.copy_language_ww
+
+/-! ## T1: plain PEG embeds into arity-0 Macro PEG (both directions) -/
+
+/-- info: 'Shallot.MacroPeg.peg_embed_complete' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.peg_embed_complete
+
+/-- info: 'Shallot.MacroPeg.peg_embed_sound' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.peg_embed_sound
+
+/-! ## `aⁿbⁿcⁿ` — a non-context-free language a plain PEG recognizes -/
+
+/-- info: 'Shallot.S_char' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.S_char
+
+/-! ## T2: GNF CFG embeds into arity-1 Macro PEG (both directions) -/
+
+/-- info: 'Shallot.Cfg.cfg_cps_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.cfg_cps_complete
+
+/-- info: 'Shallot.Cfg.cfg_cps_sound' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.cfg_cps_sound
+
+/-! ## T3: `CFL ⊊ MPEL^CBN_1` — the language-hierarchy theorem -/
+
+/-- info: 'Shallot.Cfg.cfl_proper_subset_mpel1' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.cfl_proper_subset_mpel1

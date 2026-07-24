@@ -280,3 +280,49 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   リスクなし——`make verify` で 60+318+20 ケース全件無退行を確認した上で
   `mExpandCase`（corpus ID `340`/`341`）を追加し、Lens で自動抽出した Scala
   経由の 3 方一致（Lean ≡ golden ≡ Scala、計 22 ケース）を達成した
+
+## CFG 研究: `CFL ⊊ MPEL^CBN_1`（`Cfg/` / `MacroPeg/PegEmbed.lean` / `Shallot/Peg/Examples.lean`）
+
+kmizu/macro_peg（2016年 SWoPP 原稿）が発見的に示唆していた「Macro PEL は CFL を
+真に含む」という主張を、T1（プレーン PEG の埋め込み）・T2（GNF 化した CFG の
+埋め込み）・T3（両者を組み合わせた言語階層定理）として機械証明した。
+
+| 定理 | 内容 | 公理 |
+|------|------|------|
+| `MacroPeg.peg_embed_complete` (T1, 完全性) | プレーン PEG の導出 `Derives g e x o` は、0引数 Macro PEG への埋め込み `embedExp e` 上の `MDerives`（call-by-name）に忠実に写る | propext |
+| `MacroPeg.peg_embed_sound` (T1, 健全性) | その逆——埋め込みの導出は、元のプレーン PEG の導出を正確に反映する（両方向が揃って初めて「埋め込みは言語を保存する」が言える） | propext |
+| `Cfg.cfg_cps_complete` / `cfg_cps_sound` (T2) | GNF（Greibach標準形）の CFG に対する CPS 埋め込み `cfgToMacroPeg`——1引数の継続渡しで、優先順位付き選択の「ローカル成功・継続失敗」バックトラックに対応 | propext(+Classical.choice/Quot.sound の一部) |
+| `Shallot.S_char` | aⁿbⁿcⁿ（非文脈自由）の完全な文字特徴づけ——2016年原稿 Fig.6 のプレーン PEG 文法 `S ← &(A !"b") "a"+ B !.` が厳密にこの言語を認識することの証明 | propext, Quot.sound |
+| `Cfg.cfl_proper_subset_mpel1` (T3) | `MPEL^CBN_1`（0/1引数ルートの Macro PEG が認識する言語のクラス）は CFL を真に含む——GNF 化できる CFG は T2 で埋め込め、かつ aⁿbⁿcⁿ が T1+`S_char` で `MPEL^CBN_1` に属しながら CFL でない（非文脈自由性は明示的仮説として受け取る、下記参照） | propext, Classical.choice, Quot.sound |
+
+正直なスコープ（誠実に開示すべき2点、モジュールヘッダにも明記）:
+- **GNF 仮説**: 一般 CFG→GNF 正規化（ε・単位規則・左再帰の除去）は classical
+  （Greibach 1965 / Hopcroft–Ullman）であり、このプロジェクトでは形式化していない
+  ——引用に留め、`axiom`/未証明プレースホルダとして忍び込ませることはしていない。
+  `Cfg.gnf_cfl_subset_mpel1` の仮説は `isGnfB cg = true` であり、「任意の CFG」
+  ではない
+- **非文脈自由性の仮説化**: aⁿbⁿcⁿ が CFL でないという事実（pumping lemma、古典的）
+  も明示的な仮説として `cfl_proper_subset_mpel1` に渡す——呼び出し側がこの古典的
+  証明を供給する設計
+- **`CFL ⊆ PEL`（マクロなしのプレーン PEG）は未解決のまま**: T2 の CPS 構成は
+  継続を実引数として渡すマクロ層の力に本質的に依存しており、マクロ拡張のない
+  プレーン PEG には転用できない。偶数長回文が CFL⊆PEL の反例候補として有力だが
+  証明の構成法は見つかっていない（2020年以降も進展なし、確認済み）——この論点は
+  T3 の対象ではなく、別の未解決問題（回文予想）である
+
+設計上の勘所（Lean 特有の罠、次回以降のための備忘）:
+- **`conv_lhs`/`conv_rhs` は Mathlib 専用のマクロで、Mathlib 非依存のこのプロジェクト
+  には存在しない**——`conv => lhs; rw [...]`（core Lean の `conv` ブロック内ナビゲー
+  ション）が正しい書き方
+- **ネストした `cases` で複数の枝が共有する新規変数の名前は、後続の `cases` に
+  握りつぶされることがある**（`cases`が共有依存変数を revert・再導入する際、ユーザー
+  指定名を保持しない）。対策は (a) 握りつぶした直後に `rename_i` で名前を回復する、
+  (b) 反転をフラットな存在量化子で返す独立補題（`seq_inv` 等）を先に証明し、本体では
+  `obtain` で取り出す——後者の方が深いネストで信頼できる
+- **`MDerives` は `DerivesArgsPar`/`DerivesArgsSeq` と相互帰納**なので、`induction h with`
+  は使えず（"does not support mutually inductive types" エラー）、`induction h using
+  MDerives.rec (motive_2 := ...) (motive_3 := ...)` の後に `case NAME args => tac` を
+  並べる必要がある（`MacroPeg/Determinism.lean` の `mderives_det` が同型の先例）
+- **コンストラクタの不一致を閉じるには `simp only [...] at h` だけでは不十分**な場合が
+  多い（`h : C1 = C2` が単純化されずに残る）——`cases h`/`injection h` を使うのが
+  確実（一致する場合は成分を取り出し、不一致なら自動的にゴールを閉じる）
