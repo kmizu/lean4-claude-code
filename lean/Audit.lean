@@ -221,3 +221,14 @@ Add one `#guard_msgs in #print axioms <theorem>` block per flagship theorem.
 /-- info: 'Shallot.Cfg.cfl_proper_subset_mpel1' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.Cfg.cfl_proper_subset_mpel1
+
+/-! ## T7: `CFL ⊆ PEL` — the settled half (`PEL ⊄ CFL`); the other
+direction is an open problem, documented not proved (`Cfg/OpenProblems.lean`) -/
+
+/-- info: 'Shallot.Cfg.abc_isPEL' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.abc_isPEL
+
+/-- info: 'Shallot.Cfg.pel_not_subset_cfl' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.pel_not_subset_cfl
