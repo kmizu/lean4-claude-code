@@ -15,6 +15,8 @@ import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
 import Shallot.Peg.Examples
 import Shallot.Peg.Palindrome
+import Shallot.Peg.PowerTwoHelper
+import Shallot.Peg.PalindromeEpsFirst
 import MacroPeg
 import Cfg
 
@@ -248,6 +250,24 @@ PEG, is sound but incomplete (`Shallot/Peg/Palindrome.lean`) -/
 /-- info: 'Shallot.palGrammar_accepts_only_palindromes' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.palGrammar_accepts_only_palindromes
+
+/-! ## T7 evidence, positive side: Loff–Moreira–Reis's Theorem 8 mechanism
+(`Shallot/Peg/PowerTwoHelper.lean`) -/
+
+/-- info: 'Shallot.helper_consumption' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.helper_consumption
+
+/-- info: 'Shallot.helper_full_on_power_of_two' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.helper_full_on_power_of_two
+
+/-! ## T7 evidence, another natural construction tried: eps-first priority
+order rejects every non-empty input (`Shallot/Peg/PalindromeEpsFirst.lean`) -/
+
+/-- info: 'Shallot.palEpsFirst_rejects_nonempty' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.palEpsFirst_rejects_nonempty
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
