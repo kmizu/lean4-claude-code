@@ -18,6 +18,7 @@ import Shallot.Peg.Palindrome
 import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeEpsFirst
 import Shallot.Peg.PalindromeEpsMiddle
+import Shallot.Peg.PalindromeAllOrders
 import MacroPeg
 import Cfg
 
@@ -276,6 +277,13 @@ alternative structurally unreachable (`Shallot/Peg/PalindromeEpsMiddle.lean`) -/
 /-- info: 'Shallot.palEpsMiddle_rejects_bb' does not depend on any axioms -/
 #guard_msgs in
 #print axioms Shallot.palEpsMiddle_rejects_bb
+
+/-! ## T7 evidence: complete classification of all 6 priority orders of the
+peel-both-ends family (`Shallot/Peg/PalindromeAllOrders.lean`) -/
+
+/-- info: 'Shallot.all_six_peel_orders_incomplete' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.all_six_peel_orders_incomplete
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/

@@ -1,6 +1,7 @@
 import Cfg.Properness
 import Shallot.Peg.Palindrome
 import Shallot.Peg.PowerTwoHelper
+import Shallot.Peg.PalindromeAllOrders
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -168,6 +169,33 @@ genuinely different reason than the first (not "insufficient channel
 capacity" but "sufficient raw capacity, no argument against its correct
 alignment").
 
+**A third data point, this time straight from the paper's own examples
+rather than derived here**: §3.3 (Theorem 9) constructs a PEG for a
+"reversed counting" language using an "inversion" nonterminal `Inverted ←
+1 Inverted 1 / 0 Inverted 0 / ◦` that matches `wʳ ◦ w` for arbitrary `w` —
+structurally identical to `palGrammar`'s peel-both-ends shape, but it
+WORKS there, without any of `palGrammar`'s incompleteness. The difference
+is that `◦` is an explicit, unambiguous marker of the midpoint, present in
+the input alphabet itself — with a designated separator character telling
+`Inverted` exactly when to stop recursing (via the `◦` base case) instead
+of `Pal`'s `ε` base case, which fires the instant the recursion COULD
+stop, whether or not it's actually at the true midpoint. The paper then
+states directly (end of §3.3): the underlying "scan digits right-to-left"
+algorithm its `AddOneBlock`/`Carry`/`NextIs∗` machinery needs "does not
+appear to be possible to implement using PEGs" directly — it has to be
+simulated by "invert, then scan left-to-right" (their own named "reverse
+and scan" trick) BECAUSE that inversion requires exactly the same
+explicit-separator mechanism `Inverted` uses. This is independent, paper-
+native confirmation of the same diagnosis reached above from first
+principles: what plain PEG is missing for palindromes specifically is not
+raw recursive/informational power (Theorem 9's own construction has
+plenty, doing full binary increment) but an unambiguous, input-alphabet-
+level signal for where matching halves meet — precisely what a genuine
+palindrome (no separator, midpoint determined only by total length) does
+not supply, and what no available lookahead can conjure up unless the
+midpoint happens to be locatable in absolute terms from one end alone (as
+Theorem 8's power-of-two trick manages).
+
 **Why T2's construction does not transfer to this question**: T2's CPS
 embedding of a CFG into Macro PEG is essentially built on continuations —
 `buildCallSeq` threads "what to try next if this succeeds" as an actual
@@ -241,6 +269,18 @@ result — see that module for the actual theorems and their proofs):
   governs the `"aaaa"`-style failure, its position relative to later
   alternatives governs whether those alternatives are reachable at all —
   not two instances of the same mistake.
+- **This case analysis is now COMPLETE, not just three representative
+  samples**: `Shallot/Peg/PalindromeAllOrders.lean` formalizes the
+  remaining three orderings (the `a ↔ b` mirror of each of the above,
+  by the grammar's total symmetry under swapping the two characters) and
+  proves `Shallot.all_six_peel_orders_incomplete` — all 6 possible
+  orderings of `{"a" Pal "a", "b" Pal "b", ε}` inside a single `.alt`
+  chain are incomplete, each with its own explicit witness. This is a
+  genuinely bounded but COMPLETE result: not a step toward proving
+  `CFLSubsetPELConjecture` in general, but a full classification closing
+  off this entire small, natural grammar family at once, rather than
+  leaving the other orderings as untested variations that might have
+  behaved differently.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of
