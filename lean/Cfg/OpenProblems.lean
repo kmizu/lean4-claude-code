@@ -3,6 +3,7 @@ import Shallot.Peg.Palindrome
 import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeAllOrders
 import Shallot.Peg.MidPoint
+import Shallot.Peg.MidPointGeneral
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -302,6 +303,31 @@ impose. This directly corroborates the `IAmPowerTwoLength`/`Helper`
 analysis above and the paper's own "reverse and scan" remark: what plain
 PEG structurally lacks is a general way to locate a data-dependent
 midpoint, not the extra step of comparing what's found there.
+
+**Upgrading the midpoint-isolation witness into a genuine theorem**:
+`Shallot/Peg/MidPointGeneral.lean` generalizes `MidPoint.lean`'s single
+`"bab"` instance into a real, universally-quantified theorem —
+`Shallot.genMid_rejects_c1c0c1`: for EVERY pair of distinct characters
+`c0 ≠ c1` (not just `('a','b')`), the direct PEG transcription of `S → c0
+S c0 | c1 S c0 | c0` rejects `[c1, c0, c1]`. The proof never inspects
+what `c0`/`c1` actually ARE, only that they differ — it is a structural
+consequence of `derives_det` alone: the innermost recursive call, on the
+shortest suffix where recursion becomes impossible, commits to the fixed
+base case with NO knowledge of whether this is the depth the ORIGINAL
+input's length actually calls for. This crisply separates what plain PEG
+CAN and CANNOT access about position: a nonterminal's `Derives`-behavior
+on a suffix depends only on that suffix's own content and length (hence
+CAN depend on "distance from the end of input", exactly what `Helper`/
+`IAmPowerTwoLength` in `PowerTwoHelper.lean` exploits) but structurally
+CANNOT depend on "distance from the start" / "how much has already been
+consumed" (information the suffix alone never carries) — which is
+precisely the fact a general midpoint-locator would need for ARBITRARY
+lengths. This theorem is honest about its scope: it rules out the
+peel-recurse-with-fixed-base construction family, for every alphabet —
+it does not, and structurally cannot by itself, prove
+`¬CFLSubsetPELConjecture`, since it says nothing about constructions
+built around absolute end-distance tricks (Theorem 8's escape hatch) or
+any approach not of this shape.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of

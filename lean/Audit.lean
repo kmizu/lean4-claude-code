@@ -20,6 +20,7 @@ import Shallot.Peg.PalindromeEpsFirst
 import Shallot.Peg.PalindromeEpsMiddle
 import Shallot.Peg.PalindromeAllOrders
 import Shallot.Peg.MidPoint
+import Shallot.Peg.MidPointGeneral
 import MacroPeg
 import Cfg
 
@@ -292,6 +293,13 @@ already breaks this construction style (`Shallot/Peg/MidPoint.lean`) -/
 /-- info: 'Shallot.midGrammar_rejects_bab' depends on axioms: [propext] -/
 #guard_msgs in
 #print axioms Shallot.midGrammar_rejects_bab
+
+/-! ## T7 theorem: PEG cannot locate the midpoint, quantified over every
+2-letter alphabet (`Shallot/Peg/MidPointGeneral.lean`) -/
+
+/-- info: 'Shallot.genMid_rejects_c1c0c1' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genMid_rejects_c1c0c1
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
