@@ -7,7 +7,7 @@ autoImplicit = false
 
 [[lean_lib]]
 name = "Shallot"
-roots = ["Shallot", "Audit", "Json", "MacroPeg"]
+roots = ["Shallot", "Audit", "Json", "MacroPeg", "Cfg"]
 
 [[lean_lib]]
 name = "Lens"
@@ -33,3 +33,7 @@ root = "JsonSuite"
 [[lean_exe]]
 name = "mpeg-runner"
 root = "MPegRunner"
+
+[[lean_exe]]
+name = "counterexample-runner"
+root = "CounterexampleRunner"

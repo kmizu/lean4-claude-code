@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 targets=()
-for d in lean/Shallot lean/Lens lean/LensTest; do
+for d in lean/Shallot lean/Lens lean/LensTest lean/MacroPeg lean/Cfg; do
   [ -d "$d" ] && targets+=("$d")
 done
 for f in lean/Shallot.lean lean/Lens.lean lean/Audit.lean lean/Runner.lean lean/LensTests.lean; do

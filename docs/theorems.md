@@ -280,3 +280,176 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   リスクなし——`make verify` で 60+318+20 ケース全件無退行を確認した上で
   `mExpandCase`（corpus ID `340`/`341`）を追加し、Lens で自動抽出した Scala
   経由の 3 方一致（Lean ≡ golden ≡ Scala、計 22 ケース）を達成した
+
+## CFG 研究: `CFL ⊊ MPEL^CBN_1`（`Cfg/` / `MacroPeg/PegEmbed.lean` / `Shallot/Peg/Examples.lean`）
+
+kmizu/macro_peg（2016年 SWoPP 原稿）が発見的に示唆していた「Macro PEL は CFL を
+真に含む」という主張を、T1（プレーン PEG の埋め込み）・T2（GNF 化した CFG の
+埋め込み）・T3（両者を組み合わせた言語階層定理）として機械証明した。
+
+| 定理 | 内容 | 公理 |
+|------|------|------|
+| `MacroPeg.peg_embed_complete` (T1, 完全性) | プレーン PEG の導出 `Derives g e x o` は、0引数 Macro PEG への埋め込み `embedExp e` 上の `MDerives`（call-by-name）に忠実に写る | propext |
+| `MacroPeg.peg_embed_sound` (T1, 健全性) | その逆——埋め込みの導出は、元のプレーン PEG の導出を正確に反映する（両方向が揃って初めて「埋め込みは言語を保存する」が言える） | propext |
+| `Cfg.cfg_cps_complete` / `cfg_cps_sound` (T2) | GNF（Greibach標準形）の CFG に対する CPS 埋め込み `cfgToMacroPeg`——1引数の継続渡しで、優先順位付き選択の「ローカル成功・継続失敗」バックトラックに対応 | propext(+Classical.choice/Quot.sound の一部) |
+| `Shallot.S_char` | aⁿbⁿcⁿ（非文脈自由）の完全な文字特徴づけ——2016年原稿 Fig.6 のプレーン PEG 文法 `S ← &(A !"b") "a"+ B !.` が厳密にこの言語を認識することの証明 | propext, Quot.sound |
+| `Cfg.cfl_proper_subset_mpel1` (T3) | `MPEL^CBN_1`（0/1引数ルートの Macro PEG が認識する言語のクラス）は CFL を真に含む——GNF 化できる CFG は T2 で埋め込め、かつ aⁿbⁿcⁿ が T1+`S_char` で `MPEL^CBN_1` に属しながら CFL でない（非文脈自由性は明示的仮説として受け取る、下記参照） | propext, Classical.choice, Quot.sound |
+
+正直なスコープ（誠実に開示すべき2点、モジュールヘッダにも明記）:
+- **GNF 仮説**: 一般 CFG→GNF 正規化（ε・単位規則・左再帰の除去）は classical
+  （Greibach 1965 / Hopcroft–Ullman）であり、このプロジェクトでは形式化していない
+  ——引用に留め、`axiom`/未証明プレースホルダとして忍び込ませることはしていない。
+  `Cfg.gnf_cfl_subset_mpel1` の仮説は `isGnfB cg = true` であり、「任意の CFG」
+  ではない
+- **非文脈自由性の仮説化**: aⁿbⁿcⁿ が CFL でないという事実（pumping lemma、古典的）
+  も明示的な仮説として `cfl_proper_subset_mpel1` に渡す——呼び出し側がこの古典的
+  証明を供給する設計
+- **`CFL ⊆ PEL`（マクロなしのプレーン PEG）は未解決のまま**: T2 の CPS 構成は
+  継続を実引数として渡すマクロ層の力に本質的に依存しており、マクロ拡張のない
+  プレーン PEG には転用できない。偶数長回文が CFL⊆PEL の反例候補として有力だが
+  証明の構成法は見つかっていない（2020年以降も進展なし、確認済み）——この論点は
+  T3 の対象ではなく、別の未解決問題（回文予想）である。T7（下記）でこの問題を
+  正式に文書化した
+
+## T7: `CFL ⊆ PEL`（マクロなしのプレーン PEG）——未解決問題の文書化（`Cfg/OpenProblems.lean`）
+
+T3 が解決したのは Macro 拡張版（`CFL ⊊ MPEL^CBN_1`）であり、より古い「プレーン
+PEG は CFL を全部含むか」という問題（Ford, POPL 2004 が最初に予想）とは別物——
+両者を混同しないことが誠実さの要点。この節では**解決済みの半分**を機械証明し、
+**未解決の半分**を`Prop`として明示的に文書化した（`axiom`/未証明プレースホルダとして
+忍び込ませることはしていない）。
+
+| 定理 | 内容 | 公理 |
+|------|------|------|
+| `Cfg.abc_isPEL` | aⁿbⁿcⁿ はプレーン PEG（`abcGrammar`、マクロ機構は一切不要）で認識される——`S_char`からほぼ無料で得られる | propext, Quot.sound |
+| `Cfg.pel_not_subset_cfl` | **解決済み**: `PEL ⊄ CFL`——`abc_isPEL`と非文脈自由性の仮説（T3と同じ pumping lemma 仮説）を組み合わせるだけ | propext, Quot.sound |
+| `Cfg.CFLSubsetPELConjecture` | **未解決**（証明も反証もしていない）：任意の CFL がプレーン PEG で認識可能か。`theorem`ではなく`Prop`の`def`として、答えを主張せずに問題の内容だけを正確に固定する | （定理ではないため公理監査の対象外） |
+| `Cfg.EvenPalindromes` | 反例候補の最有力語族——`{a,b}`上の偶数長回文（教科書的CFG`S → aSa \| bSb \| ε`で文脈自由なのは自明、PEG非表現性は未証明）を`Language`として厳密に定義（CFGは構築していない） |  |
+
+なぜ T2 の構成が転用できないか: T2 の CPS 埋め込みは`buildCallSeq`が「次に何を
+試すか」という継続を**パラメータ付きルールへの実引数として渡す**ことに本質的に
+依存している。プレーンPEGのルールは引数を一切持てないため、この機構がそもそも
+存在しない——マクロ層の余分な表現力が「パラメータ付きルールが制御フローをデータ
+として運べること」に由来するという非対称性そのものが興味深い考察点。本気で
+取り組むなら scaffolding automata 流の pumping 的議論、または全く新しい手法が
+必要（Loff/Moreira/Reisはこの問題を解決していない）。今後進展があっても
+「Conjecture」（または「Bounded-survived: サイズNまで全数探索で確認済み」）
+ラベルを外さないこと——未証明のまま`axiom`/プレースホルダとして忍び込ませない。
+
+設計上の勘所（Lean 特有の罠、次回以降のための備忘）:
+- **`conv_lhs`/`conv_rhs` は Mathlib 専用のマクロで、Mathlib 非依存のこのプロジェクト
+  には存在しない**——`conv => lhs; rw [...]`（core Lean の `conv` ブロック内ナビゲー
+  ション）が正しい書き方
+- **ネストした `cases` で複数の枝が共有する新規変数の名前は、後続の `cases` に
+  握りつぶされることがある**（`cases`が共有依存変数を revert・再導入する際、ユーザー
+  指定名を保持しない）。対策は (a) 握りつぶした直後に `rename_i` で名前を回復する、
+  (b) 反転をフラットな存在量化子で返す独立補題（`seq_inv` 等）を先に証明し、本体では
+  `obtain` で取り出す——後者の方が深いネストで信頼できる
+- **`MDerives` は `DerivesArgsPar`/`DerivesArgsSeq` と相互帰納**なので、`induction h with`
+  は使えず（"does not support mutually inductive types" エラー）、`induction h using
+  MDerives.rec (motive_2 := ...) (motive_3 := ...)` の後に `case NAME args => tac` を
+  並べる必要がある（`MacroPeg/Determinism.lean` の `mderives_det` が同型の先例）
+- **コンストラクタの不一致を閉じるには `simp only [...] at h` だけでは不十分**な場合が
+  多い（`h : C1 = C2` が単純化されずに残る）——`cases h`/`injection h` を使うのが
+  確実（一致する場合は成分を取り出し、不一致なら自動的にゴールを閉じる）
+
+## Related Work: 関連研究
+
+上の CFG 研究（T1-T3）と T7 が立っている場所を、既存研究の中に位置づけておく。
+以下は本プロジェクトが新たに調査したものであり、`docs/roadmap.md`・`Cfg/*.lean`・
+`MacroPeg/*.lean` に既に引用がある事実（Ford, POPL 2004／Loff–Moreira–Reis／
+Greibach 1965）とは独立に、Web検索で追加確認した。3節目（Fischer 1968）だけは
+色付け・将来課題としての言及であることを明記する。
+
+**1. PEG の計算能力**: PEG を最初に導入したのは Ford（POPL 2004）で、CFG との
+表現力の違い——PEG が真に CFL を超え得ること——を予想として提示した。本プロジェクトの
+T3（`cfl_proper_subset_mpel1`）は、この予想の「Macro 拡張版」（`CFL ⊊ MPEL^CBN_1`）
+を機械証明したものであり、T7 はプレーン PEG 版の予想（Ford 原論文由来）が今なお
+未解決のままだということを文書化したもの、という位置づけになる。Loff, Moreira,
+Reis（DLT 2018 / JCSS）は PEG が認識する言語クラス PEL 全体を scaffolding
+automata という計算モデルで完全に特徴づけ、PEL には pumping lemma が成立しない
+ことと、PEL 内に P完全な言語が存在することを示した——これは「PEL 全体の構造」に
+ついての一般定理であり、本プロジェクトの T1/T3 のような「一つの具体的な文法・
+言語を Lean で機械的に埋め込む」アプローチとは対照的（前者は非構成的・構造的、
+後者は検証可能な具体的埋め込み写像）。`Cfg/OpenProblems.lean` に既に明記の通り、
+この論文も `CFLSubsetPELConjecture` そのものを解決してはいない。Rubtsov,
+Chudinov（MFCS 2024, "Computational Model for Parsing Expression Grammars"）は、
+記号を pop する際にヘッドを push した位置へ戻れるよう決定性 pushdown automaton
+（DPDA）を拡張した計算モデルを導入し、この拡張モデルで特徴づけられる PEL の
+部分クラスが、DCFL の正則閉包の Boolean 閉包という非自明なクラスを含み、かつ
+線形時間で認識可能であることを示した。Loff–Moreira–Reis が「PEL 全体」を
+特徴づけたのに対し、Rubtsov–Chudinov は「PEL のある部分クラス」をオートマトン
+同値で特徴づける、という違いがある——本プロジェクトはこの論文の結果を独立には
+検証しておらず、ここでは色付けとしての言及に留め、T7 の未解決予想への直接の
+含意は主張しない。
+
+**2. CFG から PEG への変換の既存研究**: Mascarenhas, Medeiros, Ierusalimschy
+（"On the Relation between Context-Free Grammars and Parsing Expression
+Grammars", Science of Computer Programming 89, 2014／arXiv:1304.3177）は、
+LL(1) 文法は CFG として読んでも PEG として読んでも同じ言語を定義することを
+証明し、strong-LL(k)・右線形文法・LL-regular 言語についても単純な言語保存
+変換が存在することを示した。これと本プロジェクトの T2 の関係は対照的で、
+トレードオフの両端を成している——Mascarenhas 等の変換はプレーン PEG の枠内に
+留まる代わりに、対象を LL(1)・強 LL(k) など制限された文法クラスに絞っている。
+対して本プロジェクトの T2（`Cfg.cfg_cps_complete`/`cfg_cps_sound`）は、GNF 化
+できる CFG であれば（`isGnfB` を仮説として受け取る形で——一般 CFG→GNF 正規化
+自体は古典的操作として引用に留め、形式化はしていない）文法クラスを制限せずに
+埋め込めるという一般性を持つが、その代償としてプレーン PEG の枠内には収まらず、
+継続渡し（CPS）による Macro 拡張が本質的に必要になる。「文法クラスを広げる
+ほどマクロの力が要る」「プレーン PEG に留めるには文法クラスを絞る」という、
+この非対称性そのものが T7 の module docstring でも述べた考察点と一致する。
+
+**3. マクロ文法と indexed languages——将来課題としての色付け**: ここは本
+プロジェクトが実際に調査したものではなく、一般的な背景知識として付け加える
+色付けであることを明記しておく。Fischer（"Grammars with Macro-Like
+Productions", Proc. 9th Annual Symposium on Switching and Automata Theory
+（SWAT 1968）、原型は Harvard 大学の博士論文）は、CFG の非終端記号に実引数を
+付与し、IO（inside-out）／OI（outside-in）という2通りの展開順序を区別する
+「マクロ文法」を導入した——これは indexed language（indexed grammar）や
+OI 階層と関係が深い分野で、`macro_peg` という名前自体がこの伝統を踏まえて
+いる可能性がある。ただし「2016年 SWoPP 原稿が Fischer を実際に引用しているか」
+はこのセッションでは確認できておらず（手元の `macro_peg` チェックアウトに
+原稿ファイルが見当たらない）、断定はしない。Macro PEG が認識する言語クラス
+（MPEL）と indexed languages・OI 階層がどう関係するか（あるいは無関係か）は、
+本プロジェクトでは一切調査していない、純粋な将来課題である。
+
+**4. 文脈依存 PEG 拡張と形式検証の先行研究**: Matsumura, Kuramitsu
+（"A Declarative Extension of Parsing Expression Grammars for Recognizing
+Most Programming Languages"（Nez）, Journal of Information Processing
+（IPSJ）24(2), 2016, pp.256-264）は、C/C++ の typedef 問題（識別子が型名か
+どうかが文脈依存）・Python のインデントに基づくレイアウト構文・ヒアドキュメント
+という、PEG にとって特に扱いにくい3つの構文を、意味アクション（手続き的コード
+埋め込み）ではなくシンボルテーブルと条件付き規則という宣言的機構で扱えることを
+示した。これは本プロジェクトが扱う「PEG/Macro PEG の表現力の階層」という軸とは
+別の軸——「文脈依存性」という軸——の拡張であり、本プロジェクトの `MExp`/`MGrammar`
+には対応する機構が存在しない。形式検証の先行研究としては、TRX（Koprowski,
+Binsztok, "TRX: A Formally Verified Parser Interpreter", Logical Methods in
+Computer Science 7(2), 2011——初出は APLAS 2010）が Coq 上で PEG パーサ
+インタプリタを形式化し、明示的な整形式性（well-formedness）条件のもとでの
+停止性と健全性を証明した（`docs/guide/03-peg-semantics.md`/`docs/en/
+03-peg-semantics.md` で「先行形式化」として既に言及済みだったものに、ここで
+正確な出典を追加する）。その後 Blaudeau, Shankar（"A Verified Packrat Parser
+Interpreter for Parsing Expression Grammars", CPP 2020）は PVS 上で PEG の
+メタ理論を形式化し、参照実装の再帰下降パーサインタプリタに対して packrat
+パーサインタプリタ（および意味解釈への拡張）が同値であることを証明した——
+Web検索で確認できた範囲では、TRX が健全性側に重心を置いていたのに対し、この
+系列の後続研究では導出の一意性を込めた完全性側にも踏み込んで扱われるように
+なった、という報告がある（この一次資料同士の比較は本プロジェクトが直接検証した
+ものではなく、検索結果の要約に基づく）。本プロジェクトの T1（健全性・完全性の
+両方向）／T3（完全性）が「健全性と完全性は別の定理であり、どちらか一方が
+自動的に他方を含意しない」という区別を明示的に書き分けているのと同じ問題意識が、
+これら先行研究の系譜にも一貫して見られる。
+
+最後に、本プロジェクトのスコープを上記4分野に対して明確に切り分けておく。
+T1-T3 および T2 の CPS 埋め込みが対象とするのは、あくまで Macro 拡張された
+PEG 階層（Macro PEG／MPEL）についての結果であり、Ford が予想し
+Loff–Moreira–Reis／Rubtsov–Chudinov が取り組んできた、プレーン PEG の言語
+クラス PEL そのものについての一般理論とは別物である。T7 はその「プレーン PEG
+についての」古い未解決問題（`CFLSubsetPELConjecture`、CFL⊆PEL予想）を `Prop`
+として正確に文書化したに過ぎず、証明も反証もしていない。マクロ文法と indexed
+languages・OI 階層との関係（3節目）は、本プロジェクトが一度も手をつけていない
+純粋な将来課題であり、既存の定理から論理的に導かれるものでも示唆されるもの
+でもない。文脈依存拡張（Matsumura–Kuramitsu）や、TRX／PVS packrat の完全性側
+拡張も同様に、本プロジェクトの `MExp`/`MGrammar` には実装されていない別軸の
+拡張である——関連研究として引用するが、本プロジェクトの定理がそれらを包含・
+一般化・あるいは反証すると主張するものではない。

@@ -45,9 +45,32 @@ lazy val shallotCli = project
     commonTestSettings
   )
 
+// Vendored reference implementation (kmizu/macro_peg, frozen commit -- see
+// UPSTREAM.md). Lax flags: vendored code is exempt from this repo's lint policy.
+lazy val macroPegRef = project
+  .in(file("macro-peg-ref"))
+  .settings(
+    name := "macro-peg-ref",
+    scalacOptions ++= Seq("-deprecation"),
+    Compile / doc / sources := Nil
+  )
+
+// Independent differential driver for the 3 hand-picked counterexamples
+// (CE-001/002/003) against the vendored reference `Evaluator`. Hand-written
+// code authored for this project: strict lint settings apply (unlike the
+// vendored macroPegRef it depends on).
+lazy val macroPegDiff = project
+  .in(file("macro-peg-diff"))
+  .dependsOn(macroPegRef)
+  .settings(
+    name := "macro-peg-diff",
+    scalacOptions ++= strictOpts,
+    commonTestSettings
+  )
+
 lazy val root = project
   .in(file("."))
-  .aggregate(runtime, generated, shallotCli)
+  .aggregate(runtime, generated, shallotCli, macroPegRef, macroPegDiff)
   .settings(
     name := "shallot-root",
     publish / skip := true
