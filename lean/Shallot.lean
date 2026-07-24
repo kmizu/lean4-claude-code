@@ -12,6 +12,7 @@ import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
 import Shallot.Peg.Examples
+import Shallot.Peg.Palindrome
 import Shallot.Data.RBMap
 import Shallot.Data.RBVerify
 import Shallot.Data.RBBalance

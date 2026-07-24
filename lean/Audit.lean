@@ -14,6 +14,7 @@ import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
 import Shallot.Peg.Examples
+import Shallot.Peg.Palindrome
 import MacroPeg
 import Cfg
 
@@ -232,6 +233,21 @@ direction is an open problem, documented not proved (`Cfg/OpenProblems.lean`) -/
 /-- info: 'Shallot.Cfg.pel_not_subset_cfl' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.Cfg.pel_not_subset_cfl
+
+/-! ## T7 evidence: the textbook palindrome CFG, read literally as a plain
+PEG, is sound but incomplete (`Shallot/Peg/Palindrome.lean`) -/
+
+/-- info: 'Shallot.exists_palindrome_palGrammar_rejects' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.exists_palindrome_palGrammar_rejects
+
+/-- info: 'Shallot.palGrammar_sound' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.palGrammar_sound
+
+/-- info: 'Shallot.palGrammar_accepts_only_palindromes' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.palGrammar_accepts_only_palindromes
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/

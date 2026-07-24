@@ -1,4 +1,5 @@
 import Cfg.Properness
+import Shallot.Peg.Palindrome
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -42,10 +43,50 @@ point of interest, not just a technical dead end.
 
 Tackling `CFLSubsetPELConjecture` for real would need either a scaffolding-
 automata-style pumping argument specific to PEG's semantics, or a genuinely
-new technique — this file makes no attempt at either. Any future progress
-should keep the "Conjecture" label (or a weaker "Bounded-survived: true up
-to size N, exhaustively checked" label) until an actual proof exists —
-never smuggled in as an unproven declaration or placeholder gap.
+new technique — this file itself makes no attempt at either, but
+`Shallot/Peg/Palindrome.lean` makes a first real attempt at ONE natural
+approach and reports exactly how far it gets (this is not this file's own
+result — see that module for the actual theorems and their proofs):
+
+- The single most obvious construction — transcribing the textbook CFG
+  `Pal → a Pal a | b Pal b | ε` literally into PEG surface syntax — is
+  machine-proven **incomplete**: `"aaaa"` is a genuine palindrome this
+  grammar fails to derive a full match for
+  (`Shallot.exists_palindrome_palGrammar_rejects`). The mechanism is
+  concrete and general, not specific to this one string: Ford's
+  prioritized choice commits to whichever alternative locally succeeds
+  first, with no way to retroactively ask an already-successful
+  sub-derivation to consume less so an outer pending match can complete —
+  for a run of identical characters, the innermost recursive call closes
+  itself off greedily and can strand the characters an outer match still
+  needs.
+- The SAME construction is machine-proven **sound** — it never accepts a
+  non-palindrome, for ANY input, not just up to some bound
+  (`Shallot.palGrammar_accepts_only_palindromes`, by induction on input
+  length). So this natural attempt is a genuine PARTIAL solution
+  (`{w | palGrammar accepts w} ⊊ EvenPalindromes`, a strict subset), not a
+  wrong one — it just isn't a complete one, and there is no evident way to
+  patch it into completeness within plain PEG's operational model (no
+  backreferences, no way to compare two distant positions except by
+  forcing literal character equality through the grammar's own recursive
+  structure, and that forcing is exactly what runs into the no-backtracking
+  wall above).
+- A second, more aggressive attempt (greedily consuming a MAXIMAL run of
+  the same character via `+` from each end before recursing, tried outside
+  this Lean development) was strictly WORSE — even more incomplete, still
+  sound — reinforcing rather than undermining the pattern above, though
+  this was not itself formalized here.
+
+None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
+construction (not built by peeling matching characters from both ends of
+the input) might still exist and this file does not rule that out. But it
+is real evidence, not a bare assertion, and it upgrades the conjecture's
+status from "no attempt made" to "the most natural attempt is understood
+in detail and provably falls short in a specific, structural way." Any
+future progress should keep the "Conjecture" label (or a weaker "Bounded-
+survived: true up to size N, exhaustively checked" label) until an actual
+proof exists — never smuggled in as an unproven declaration or placeholder
+gap.
 -/
 
 namespace Shallot.Cfg
