@@ -9,5 +9,9 @@ import MacroPeg.Props
 import MacroPeg.Soundness
 import MacroPeg.Determinism
 import MacroPeg.Completeness
+import MacroPeg.Divergence
+import MacroPeg.Outcome
+import MacroPeg.Counterexamples
+import MacroPeg.CounterexampleCorpus
 import MacroPeg.Render
 import MacroPeg.Corpus

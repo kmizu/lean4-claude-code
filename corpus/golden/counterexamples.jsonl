@@ -1,0 +1,4 @@
+{"case":"500-ce001-strategy-name-ab","phase":"eval","status":"ok","result":"fail"}
+{"case":"501-ce001-strategy-seq-ab","phase":"eval","status":"ok","result":"ok+0"}
+{"case":"502-ce001-strategy-par-ab","phase":"eval","status":"ok","result":"fail"}
+{"case":"510-ce002-selfcall-diverges","phase":"eval","status":"ok","result":"fuel"}

@@ -232,3 +232,30 @@ direction is an open problem, documented not proved (`Cfg/OpenProblems.lean`) -/
 /-- info: 'Shallot.Cfg.pel_not_subset_cfl' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.Cfg.pel_not_subset_cfl
+
+/-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
+see `MacroPeg/Counterexamples.lean`'s module docstring) -/
+
+/-- info: 'Shallot.MacroPeg.ce001_callByName' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.ce001_callByName
+
+/-- info: 'Shallot.MacroPeg.ce001_callByValueSeq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.ce001_callByValueSeq
+
+/-- info: 'Shallot.MacroPeg.ce001_callByValuePar' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.ce001_callByValuePar
+
+/-- info: 'Shallot.MacroPeg.ce001_strategies_disagree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.ce001_strategies_disagree
+
+/-- info: 'Shallot.MacroPeg.selfCall_loop_none' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.selfCall_loop_none
+
+/-- info: 'Shallot.MacroPeg.selfCallDiverges' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.MacroPeg.selfCallDiverges

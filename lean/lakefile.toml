@@ -33,3 +33,7 @@ root = "JsonSuite"
 [[lean_exe]]
 name = "mpeg-runner"
 root = "MPegRunner"
+
+[[lean_exe]]
+name = "counterexample-runner"
+root = "CounterexampleRunner"
