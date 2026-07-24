@@ -4,6 +4,8 @@ import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeAllOrders
 import Shallot.Peg.MidPoint
 import Shallot.Peg.MidPointGeneral
+import Shallot.Peg.PalindromeGeneral
+import Shallot.Peg.PalindromeGeneralN
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -303,6 +305,26 @@ impose. This directly corroborates the `IAmPowerTwoLength`/`Helper`
 analysis above and the paper's own "reverse and scan" remark: what plain
 PEG structurally lacks is a general way to locate a data-dependent
 midpoint, not the extra step of comparing what's found there.
+
+**Generalizing `palGrammar` itself, over both alphabet identity AND
+size**: `Shallot/Peg/PalindromeGeneral.lean` mirrors the `midGrammar`
+generalization for the ORIGINAL, central witness — genuine palindromes,
+with real end-matching, not just the midpoint-only `MidIsA` relaxation.
+`Shallot.genPal_rejects_c0c0c0c0` proves that for EVERY pair of distinct
+characters `c0 ≠ c1`, the direct transcription `Pal ← c0 Pal c0 / c1 Pal
+c1 / ε` rejects `[c0, c0, c0, c0]` — generalizing `"aaaa"` to every
+2-letter alphabet. `Shallot/Peg/PalindromeGeneralN.lean` pushes this
+further along a SECOND, independent axis — alphabet SIZE, not just
+identity: `Shallot.genPalN_rejects_c0c0c0c0` proves the same rejection
+holds no matter how many extra "distractor" peel-alternatives (for
+characters other than `c0`) are appended — one, five, or any finite
+number — because on an all-`c0` input, every alternative whose leading
+character isn't `c0` fails immediately and is simply never reached; only
+the `c0` alternative and the `ε` fallback ever matter. So the failure
+`palGrammar` (`{a, b}`, size 2) exhibits is not an artifact of a small or
+particular alphabet — it is stable under generalizing the alphabet's
+IDENTITY (any two distinct characters) and its SIZE (any number of
+distractor characters) simultaneously.
 
 **Upgrading the midpoint-isolation witness into a genuine theorem**:
 `Shallot/Peg/MidPointGeneral.lean` generalizes `MidPoint.lean`'s single

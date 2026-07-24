@@ -21,6 +21,8 @@ import Shallot.Peg.PalindromeEpsMiddle
 import Shallot.Peg.PalindromeAllOrders
 import Shallot.Peg.MidPoint
 import Shallot.Peg.MidPointGeneral
+import Shallot.Peg.PalindromeGeneral
+import Shallot.Peg.PalindromeGeneralN
 import MacroPeg
 import Cfg
 
@@ -300,6 +302,18 @@ already breaks this construction style (`Shallot/Peg/MidPoint.lean`) -/
 /-- info: 'Shallot.genMid_rejects_c1c0c1' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.genMid_rejects_c1c0c1
+
+/-! ## T7: `palGrammar`'s incompleteness generalized over any alphabet
+(`Shallot/Peg/PalindromeGeneral.lean`) and any alphabet SIZE
+(`Shallot/Peg/PalindromeGeneralN.lean`) -/
+
+/-- info: 'Shallot.genPal_rejects_c0c0c0c0' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genPal_rejects_c0c0c0c0
+
+/-- info: 'Shallot.genPalN_rejects_c0c0c0c0' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genPalN_rejects_c0c0c0c0
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
