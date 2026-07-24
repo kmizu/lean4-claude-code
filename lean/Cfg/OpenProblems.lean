@@ -223,6 +223,24 @@ result — see that module for the actual theorems and their proofs):
   This shows the failure mode isn't specific to which recursion
   (`a`-then-`b` vs. the reverse) is tried first, but to how base-case
   termination is scheduled against recursion at all.
+- A fourth attempt, `ε` placed BETWEEN the two recursive alternatives
+  instead of before or after both (`Shallot/Peg/PalindromeEpsMiddle.lean`,
+  `a-case / ε / b-case`), is formalized and reveals a THIRD, qualitatively
+  different failure mode: putting anything unconditionally-successful
+  strictly between two `.alt` branches makes every branch AFTER it
+  structurally unreachable dead code (Ford's choice commits to the first
+  successful alternative, and `ε` never fails) — so `b-case` can never
+  even be attempted. This grammar behaves identically to `palGrammar` on
+  `'a'`-only inputs (same `"aaaa"`-style partial-match failure, since
+  `b-case`'s position relative to `ε` is irrelevant when it's never
+  reached) but additionally rejects EVERY input starting with `'b'`,
+  including the minimal palindrome `"bb"` which `palGrammar` DOES accept
+  (`Shallot.palEpsMiddle_rejects_bb`). Combined with the eps-first result,
+  this establishes two INDEPENDENT design mistakes within this one family
+  of constructions — `ε`'s position relative to the first alternative
+  governs the `"aaaa"`-style failure, its position relative to later
+  alternatives governs whether those alternatives are reachable at all —
+  not two instances of the same mistake.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of

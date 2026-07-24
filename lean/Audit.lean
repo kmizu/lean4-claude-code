@@ -17,6 +17,7 @@ import Shallot.Peg.Examples
 import Shallot.Peg.Palindrome
 import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeEpsFirst
+import Shallot.Peg.PalindromeEpsMiddle
 import MacroPeg
 import Cfg
 
@@ -268,6 +269,13 @@ order rejects every non-empty input (`Shallot/Peg/PalindromeEpsFirst.lean`) -/
 /-- info: 'Shallot.palEpsFirst_rejects_nonempty' does not depend on any axioms -/
 #guard_msgs in
 #print axioms Shallot.palEpsFirst_rejects_nonempty
+
+/-! ## T7 evidence, a third priority order tried: eps-middle makes an
+alternative structurally unreachable (`Shallot/Peg/PalindromeEpsMiddle.lean`) -/
+
+/-- info: 'Shallot.palEpsMiddle_rejects_bb' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.palEpsMiddle_rejects_bb
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
