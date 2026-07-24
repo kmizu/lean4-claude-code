@@ -19,6 +19,7 @@ import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeEpsFirst
 import Shallot.Peg.PalindromeEpsMiddle
 import Shallot.Peg.PalindromeAllOrders
+import Shallot.Peg.MidPoint
 import MacroPeg
 import Cfg
 
@@ -284,6 +285,13 @@ peel-both-ends family (`Shallot/Peg/PalindromeAllOrders.lean`) -/
 /-- info: 'Shallot.all_six_peel_orders_incomplete' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.all_six_peel_orders_incomplete
+
+/-! ## T7 evidence: even a midpoint-only requirement (no end-matching)
+already breaks this construction style (`Shallot/Peg/MidPoint.lean`) -/
+
+/-- info: 'Shallot.midGrammar_rejects_bab' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.midGrammar_rejects_bab
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/

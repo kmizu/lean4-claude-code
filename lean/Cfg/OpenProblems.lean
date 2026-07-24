@@ -2,6 +2,7 @@ import Cfg.Properness
 import Shallot.Peg.Palindrome
 import Shallot.Peg.PowerTwoHelper
 import Shallot.Peg.PalindromeAllOrders
+import Shallot.Peg.MidPoint
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -281,6 +282,26 @@ result — see that module for the actual theorems and their proofs):
   off this entire small, natural grammar family at once, rather than
   leaving the other orderings as untested variations that might have
   behaved differently.
+
+**Isolating WHICH requirement actually causes the failure**: a genuine
+palindrome bundles two distinct demands together — (1) locate the
+midpoint, and (2) verify the two halves match end-to-end. `Shallot/Peg/
+MidPoint.lean` isolates demand (1) alone, dropping (2) entirely: the
+language `MidIsA := {w | |w| odd, middle character = 'a'}` places NO
+constraint whatsoever on how the two end characters relate to each other
+(`"bab"`, `"aaa"`, `"xay"` for ANY `x, y` — including mismatched ends —
+all qualify), and is certainly context-free (`S → a S a | b S a | a`).
+Yet the direct PEG transcription of that CFG is machine-proven to REJECT
+`"bab"` (`Shallot.midGrammar_rejects_bab`) — the minimal odd-length
+witness, only 3 characters. This is sharper evidence than `palGrammar`'s
+`"aaaa"`: it shows the same failure mechanism breaks things even with
+NOTHING to compare between the two ends, confirming concretely (not just
+by argument) that midpoint-location is itself the obstruction, prior to
+and independent of any end-matching demand palindromes additionally
+impose. This directly corroborates the `IAmPowerTwoLength`/`Helper`
+analysis above and the paper's own "reverse and scan" remark: what plain
+PEG structurally lacks is a general way to locate a data-dependent
+midpoint, not the extra step of comparing what's found there.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of
