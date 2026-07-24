@@ -14,6 +14,17 @@ import Shallot.Peg.Soundness
 import Shallot.Peg.Determinism
 import Shallot.Peg.Completeness
 import Shallot.Peg.Examples
+import Shallot.Peg.Palindrome
+import Shallot.Peg.PowerTwoHelper
+import Shallot.Peg.PalindromeEpsFirst
+import Shallot.Peg.PalindromeEpsMiddle
+import Shallot.Peg.PalindromeAllOrders
+import Shallot.Peg.MidPoint
+import Shallot.Peg.MidPointGeneral
+import Shallot.Peg.PalindromeGeneral
+import Shallot.Peg.PalindromeGeneralN
+import Shallot.Peg.MidpointObstruction
+import Shallot.Peg.GrammarExtend
 import MacroPeg
 import Cfg
 
@@ -232,6 +243,101 @@ direction is an open problem, documented not proved (`Cfg/OpenProblems.lean`) -/
 /-- info: 'Shallot.Cfg.pel_not_subset_cfl' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.Cfg.pel_not_subset_cfl
+
+/-! ## T7 evidence: the textbook palindrome CFG, read literally as a plain
+PEG, is sound but incomplete (`Shallot/Peg/Palindrome.lean`) -/
+
+/-- info: 'Shallot.exists_palindrome_palGrammar_rejects' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.exists_palindrome_palGrammar_rejects
+
+/-- info: 'Shallot.palGrammar_sound' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.palGrammar_sound
+
+/-- info: 'Shallot.palGrammar_accepts_only_palindromes' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.palGrammar_accepts_only_palindromes
+
+/-! ## T7 evidence, positive side: Loff–Moreira–Reis's Theorem 8 mechanism
+(`Shallot/Peg/PowerTwoHelper.lean`) -/
+
+/-- info: 'Shallot.helper_consumption' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.helper_consumption
+
+/-- info: 'Shallot.helper_full_on_power_of_two' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.helper_full_on_power_of_two
+
+/-! ## T7 evidence, another natural construction tried: eps-first priority
+order rejects every non-empty input (`Shallot/Peg/PalindromeEpsFirst.lean`) -/
+
+/-- info: 'Shallot.palEpsFirst_rejects_nonempty' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.palEpsFirst_rejects_nonempty
+
+/-! ## T7 evidence, a third priority order tried: eps-middle makes an
+alternative structurally unreachable (`Shallot/Peg/PalindromeEpsMiddle.lean`) -/
+
+/-- info: 'Shallot.palEpsMiddle_rejects_bb' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.palEpsMiddle_rejects_bb
+
+/-! ## T7 evidence: complete classification of all 6 priority orders of the
+peel-both-ends family (`Shallot/Peg/PalindromeAllOrders.lean`) -/
+
+/-- info: 'Shallot.all_six_peel_orders_incomplete' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.all_six_peel_orders_incomplete
+
+/-! ## T7 evidence: even a midpoint-only requirement (no end-matching)
+already breaks this construction style (`Shallot/Peg/MidPoint.lean`) -/
+
+/-- info: 'Shallot.midGrammar_rejects_bab' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Shallot.midGrammar_rejects_bab
+
+/-! ## T7 theorem: PEG cannot locate the midpoint, quantified over every
+2-letter alphabet (`Shallot/Peg/MidPointGeneral.lean`) -/
+
+/-- info: 'Shallot.genMid_rejects_c1c0c1' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genMid_rejects_c1c0c1
+
+/-! ## T7: `palGrammar`'s incompleteness generalized over any alphabet
+(`Shallot/Peg/PalindromeGeneral.lean`) and any alphabet SIZE
+(`Shallot/Peg/PalindromeGeneralN.lean`) -/
+
+/-- info: 'Shallot.genPal_rejects_c0c0c0c0' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genPal_rejects_c0c0c0c0
+
+/-- info: 'Shallot.genPalN_rejects_c0c0c0c0' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.genPalN_rejects_c0c0c0c0
+
+/-! ## T7: the sharpest general (grammar-shape-agnostic) form of the
+midpoint obstruction (`Shallot/Peg/MidpointObstruction.lean`) -/
+
+/-- info: 'Shallot.no_suffix_only_midpoint_decider' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.no_suffix_only_midpoint_decider
+
+/-! ## T7: routing around Ford's empty-string restriction on predicate
+elimination (`Shallot/Peg/GrammarExtend.lean`, `Cfg/NonemptyReduction.lean`) -/
+
+/-- info: 'Shallot.Cfg.isPEL_nonemptyRestriction_of_isPEL' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.isPEL_nonemptyRestriction_of_isPEL
+
+/-- info: 'Shallot.Cfg.not_isPEL_evenPalindromes_of_not_isPEL_nonempty' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.not_isPEL_evenPalindromes_of_not_isPEL_nonempty
+
+/-- info: 'Shallot.Cfg.evenPalindromes_nil' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.Cfg.evenPalindromes_nil
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
