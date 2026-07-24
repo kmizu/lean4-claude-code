@@ -7,6 +7,7 @@ import Shallot.Peg.MidPointGeneral
 import Shallot.Peg.PalindromeGeneral
 import Shallot.Peg.PalindromeGeneralN
 import Shallot.Peg.MidpointObstruction
+import Shallot.Peg.GrammarExtend
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -387,6 +388,61 @@ where the difficulty actually lives — matching, and in the alphabet/
 priority-order generality sharpening, the paper's own assessment that a
 full resolution "may well require a breakthrough" in complexity-theoretic
 lower-bound techniques.
+
+**A genuinely new attack route, opened but not yet completed**: Ford's
+own POPL 2004 paper ("Parsing Expression Grammars: A Recognition-Based
+Syntactic Foundation", Section 4.2 — read directly from the primary
+source, not secondhand) proves something this project had not previously
+consulted it for: any well-formed PEG grammar whose language does NOT
+contain the empty string can be rewritten into an equivalent
+PREDICATE-FREE, REPETITION-FREE grammar (`PEG0`) — full PEG (with `&`/`!`
+lookahead and `*` repetition) and `PEG0` have EXACTLY the same
+expressive power once `ε` is excluded. Symmetrically, Ford proves a
+predicate-free grammar accepting `ε` must accept EVERY string
+(`ε ∈ L(G) ⟹ L(G) = Σ*`), which is exactly why this restriction can't be
+lifted. `EvenPalindromes` itself contains `ε`, so the theorem doesn't
+apply directly — but `Shallot/Peg/GrammarExtend.lean` and
+`Cfg/NonemptyReduction.lean` prove the missing bridge
+(`isPEL_nonemptyRestriction_of_isPEL`): a plain PEG grammar for ANY
+language yields one for its non-empty restriction, for free (guard the
+start expression with a non-emptiness lookahead — `guardedGrammar`).
+This closes the loop:
+
+```
+  ¬IsPEL0 (EvenPalindromes \ {ε})   -- a genuine PEG0-specific impossibility proof (STILL OPEN)
+  ⟹ ¬IsPEL (EvenPalindromes \ {ε})  -- via Ford's normal-form theorem (an external citation, not reproved here)
+  ⟹ ¬IsPEL EvenPalindromes          -- via not_isPEL_evenPalindromes_of_not_isPEL_nonempty (PROVED)
+  ⟹ ¬CFLSubsetPELConjecture         -- since EvenPalindromes is context-free
+```
+
+**Honest status of this route**: only the last link is proved
+(`Cfg/NonemptyReduction.lean`, machine-checked, no placeholder gaps). The middle
+link requires citing Ford's normal-form theorem explicitly (a substantial
+three-stage construction, Sections 4.2.1–4.2.3 of the paper, not
+reproduced in this project). The first link — a genuine impossibility
+proof for `PEG0` recognizing the non-empty even-palindromes — remains
+open, and a serious, adversarially-verified attempt at it (an "eventual
+periodicity of consumption on repeated-character runs" argument,
+extending the pumping-style reasoning behind "unary CFLs are regular" to
+PEG0's deterministic, committed-choice semantics) was tried and found
+FALSE: three independent implementations confirmed a well-formed PEG0
+counterexample, `R ← 0 R 0 / ε`, whose consumption function resets to `0`
+at `m = 2^k − 1` for every `k` and hence is not eventually periodic under
+any threshold or period — the pumping step's implicit assumption that a
+repeated "wrapper" behaves the same on reinsertion fails here because
+Ford's commit-on-success `alt` makes the wrapper's behavior depend on a
+numeric-equality condition (did the recursive call exactly consume its
+substring?) that flips in a doubling pattern, not a mere success/failure
+condition a CFG-style pumping argument can rely on. (A companion
+observation from that attempt, correct but not itself progress on the
+conjecture: plain `PEG0` — zero lookahead at all — can already define a
+non-context-free unary language, `{a^(2^(n+1)-2)}`, via this same nested
+`X e X` recursion shape — worth recording as a fact about `PEG0`'s power,
+distinct from the (still separately true) fact that it cannot decide an
+unmarked midpoint.) This negative result is recorded honestly rather than
+silently discarded, per this project's discipline: a failed proof
+strategy, once verified to fail, is real information about where the
+difficulty lives, not a private dead end.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of

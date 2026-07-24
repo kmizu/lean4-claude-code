@@ -24,6 +24,7 @@ import Shallot.Peg.MidPointGeneral
 import Shallot.Peg.PalindromeGeneral
 import Shallot.Peg.PalindromeGeneralN
 import Shallot.Peg.MidpointObstruction
+import Shallot.Peg.GrammarExtend
 import MacroPeg
 import Cfg
 
@@ -322,6 +323,21 @@ midpoint obstruction (`Shallot/Peg/MidpointObstruction.lean`) -/
 /-- info: 'Shallot.no_suffix_only_midpoint_decider' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.no_suffix_only_midpoint_decider
+
+/-! ## T7: routing around Ford's empty-string restriction on predicate
+elimination (`Shallot/Peg/GrammarExtend.lean`, `Cfg/NonemptyReduction.lean`) -/
+
+/-- info: 'Shallot.Cfg.isPEL_nonemptyRestriction_of_isPEL' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.isPEL_nonemptyRestriction_of_isPEL
+
+/-- info: 'Shallot.Cfg.not_isPEL_evenPalindromes_of_not_isPEL_nonempty' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.Cfg.not_isPEL_evenPalindromes_of_not_isPEL_nonempty
+
+/-- info: 'Shallot.Cfg.evenPalindromes_nil' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Shallot.Cfg.evenPalindromes_nil
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
