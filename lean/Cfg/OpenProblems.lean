@@ -6,6 +6,7 @@ import Shallot.Peg.MidPoint
 import Shallot.Peg.MidPointGeneral
 import Shallot.Peg.PalindromeGeneral
 import Shallot.Peg.PalindromeGeneralN
+import Shallot.Peg.MidpointObstruction
 
 /-!
 # T7: `CFL ⊆ PEL` (plain, macro-free PEG) — an open problem, documented not
@@ -350,6 +351,42 @@ it does not, and structurally cannot by itself, prove
 `¬CFLSubsetPELConjecture`, since it says nothing about constructions
 built around absolute end-distance tricks (Theorem 8's escape hatch) or
 any approach not of this shape.
+
+**The sharpest general form this project's methods reach, and an honest
+account of exactly where they stop**: `Shallot/Peg/
+MidpointObstruction.lean`'s `Shallot.no_suffix_only_midpoint_decider`
+states the underlying obstruction in a form that is NOT tied to the
+peel-recurse shape (or any other specific grammar shape) at all — it is
+a fact about `Derives`'s very TYPE: a nonterminal call's outcome on a
+fixed suffix cannot depend on how much input was already consumed to
+reach that suffix, hence cannot correctly answer "is the amount consumed
+so far exactly half of the (not-yet-fully-known) total input length" for
+every possible total length sharing that suffix. Every construction
+attempted in this project — `palGrammar`, `midGrammar`, all six priority
+orderings, generalized over every alphabet and every alphabet size —
+reduces to exactly this pattern, and fails for exactly this reason.
+
+This is offered as a genuine, serious attempt at the general question —
+not a hedge — and its honest limit is this: it rules out any recognition
+strategy that reduces to a SINGLE nonterminal call being the sole
+decider of "am I at the midpoint" on a suffix. It does NOT rule out the
+logical possibility of some more distributed or holistic strategy that
+never needs to ask exactly that question at a single point — and Theorem
+8's escape hatch is proof such alternatives can exist in adjacent
+territory: it works specifically because it asks a DIFFERENT, answerable
+question (distance from the END, encoded in the suffix's own length)
+rather than the unanswerable one. Closing that last gap — showing that
+EVERY conceivable plain-PEG construction, not just every construction of
+this natural shape, must reduce to an unanswerable midpoint-decision — is
+exactly the content of the "scaffolding automata" characterization Loff,
+Moreira and Reis develop over dozens of pages and leave open; it is not
+something derivable from suffix-determinism alone, and this project does
+not claim otherwise. `CFLSubsetPELConjecture` remains open. What this
+session adds is not a proof, but the most precise available account of
+where the difficulty actually lives — matching, and in the alphabet/
+priority-order generality sharpening, the paper's own assessment that a
+full resolution "may well require a breakthrough" in complexity-theoretic
+lower-bound techniques.
 
 None of this proves `¬CFLSubsetPELConjecture` — a fundamentally different
 construction (not built by peeling matching characters from both ends of

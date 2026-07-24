@@ -23,6 +23,7 @@ import Shallot.Peg.MidPoint
 import Shallot.Peg.MidPointGeneral
 import Shallot.Peg.PalindromeGeneral
 import Shallot.Peg.PalindromeGeneralN
+import Shallot.Peg.MidpointObstruction
 import MacroPeg
 import Cfg
 
@@ -314,6 +315,13 @@ already breaks this construction style (`Shallot/Peg/MidPoint.lean`) -/
 /-- info: 'Shallot.genPalN_rejects_c0c0c0c0' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Shallot.genPalN_rejects_c0c0c0c0
+
+/-! ## T7: the sharpest general (grammar-shape-agnostic) form of the
+midpoint obstruction (`Shallot/Peg/MidpointObstruction.lean`) -/
+
+/-- info: 'Shallot.no_suffix_only_midpoint_decider' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Shallot.no_suffix_only_midpoint_decider
 
 /-! ## Counterexample corpus (CE-001, CE-002 — Lean side; CE-003 is Scala-only,
 see `MacroPeg/Counterexamples.lean`'s module docstring) -/
