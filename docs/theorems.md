@@ -86,7 +86,7 @@
 i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版は 318 ファイル
 全件で Lean 側と判定同一（不正 UTF-8 の扱い込み）。`make verify` に常設。
 
-## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3 / M-PEG-4）: kmizu/macro_peg の意味論
+## Macro PEG（M-PEG / M-PEG-2 / M-PEG-3 / M-PEG-4 / M-PEG-5）: kmizu/macro_peg の意味論
 
 `MExp`（`.param k` = 現在の規則活性化の第 k 実引数、`.call i args` = 規則 i 呼び出し）
 と、それに対する新しい導出関係 `MDerives` / インタプリタ `mpegRun` を独立モジュール
@@ -206,3 +206,70 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   `335-mpeg-hof-return-reject-a`）が計算による確認として追加されている。真に
   未形式化のまま残るのは、`MacroExpander` の全展開が実際に成功させるケース（後述）
   だけ
+
+## M-PEG-5: 非循環マクロ展開（`CallGraph.lean` / `Expand.lean`）
+
+`MacroExpander.expandGrammar`（構文的インライン展開）を、パラメータ付きルールの
+呼び出しグラフが非循環という整形式性条件のもとで形式化し、この条件下で必ず停止
+することを証明した。全体で新しい `MExp` コンストラクタは追加していない
+（`expand`/`expandGrammar` は既存 `MExp`/`MGrammar` に対する外部の変換関数）。
+
+| 定理 | 内容 | 公理 |
+|------|------|------|
+| `rank_lt_of_acyclic` | `acyclicB g = true` かつ `j ∈ g.calls i` なら `rank g j < rank g i`（非循環グラフ上の辺越しの厳密な順位低下） | propext |
+| `expand_hasCall_eq_false` (T-fix) | `MExp.expand g h e` の出力には非空引数の `.call` が一切残らない（`MacroExpander`が謳う「呼び出しが残らない」不動点に実際に到達する） | propext |
+| `expandGrammar_hasCall_eq_false` | 文法全体レベルでの T-fix（`MGrammar.expandGrammar` の全ルールの本体に呼び出しが残らない） | propext |
+| `subst_hasCall_eq_false` / `substArgs_hasCall_eq_false` | **代入は呼び出しなし性を保存する**——`MExp.subst`/`substArgs` の構造に沿った独立の mutual 帰納法。T-fix の `.call i (a::as)` ケース（展開済み本体と展開済み実引数を `subst` で合流させる箇所）が必要とする補題 | propext |
+
+設計判断（`MacroPeg/CallGraph.lean`/`Expand.lean` のヘッダに詳細）:
+- **停止性の尺度に `rank` を直接使う**（フォールバック版の「fuel で単に打ち切る」は
+  採用しなかった）: `rankGo`/`rankSuccs`（fuel と `visiting` 集合ガード付きの DFS、
+  サイクル検知は「現在のスタックに乗っているノードを再訪したら `none`」）で `rank`
+  を計算し、`rank_lt_of_acyclic` を `MExp.expand`/`expandArgs`/`expandRule` の
+  `termination_by` の測度（`(rankExpr g e, MExp.size e)` の辞書式順序）としてそのまま
+  使う。証明の核は2つの単調性補題——**L1**（fuel 単調性、`Fuel.lean` の
+  `mpegRun_mono` が直接のテンプレート、低リスク）と **L2**（`visiting` 縮小の単調性、
+  このプロジェクト初のグラフ理論で前例ゼロ、最大のリスク項目として設計時に
+  名指しされていた）。L2 は「`visiting` は成功を妨げる方向にしか働かない
+  （縮小すれば成功しやすくなり、値も大きくならない）」という直感を形式化したもので、
+  `foldl` を `foldr` に変更（`cons` 展開を直接効かせるため）し、`List.contains` 系の
+  補題名で行き詰まった末に自前の `natElem`（`argAt` と同じ流儀の自前 membership
+  チェック）に切り替える、という2回の設計転換を経て証明を完遂した。事前承認済みの
+  フォールバック（利用者が rank の候補を直接与え、機械的にチェックするだけに留める案）
+  は結局不要だった
+- **0 引数呼び出しは対象外**: `.call i (a :: as)`（実引数が非空）だけをグラフの辺／
+  展開対象とし、参照実装の `Identifier` と `Call(name, params)` の区別を、この
+  プロジェクトの一様な `.call i args` 表現の上に復元している。この設計の帰結として
+  `copyGrammar`（M-PEG のフラッグシップ）が正しく非循環判定に落ちる
+  （`Copy(w "a")` は非空引数の自己再帰）——これは参照実装の `MacroExpander` も
+  `copyGrammar` に対して実際にハングすることの独立した確認でもある（意図した設計の
+  帰結であり、バグではない）
+- **`.lam`/`.invoke` の本体は `expand` が再帰する**（`subst` とは対照的）:
+  `subst` は `.lam` を捕獲回避のため不透明な葉として扱うが、`expand` は本体全体を
+  書き換えるパスなので「呼び出し元の環境を守る」動機が最初からなく、`.lam` リテラル
+  の内側に埋め込まれた呼び出し（`closureReturnGrammar` の形そのもの）を展開せず
+  残すと「呼び出しが残らない」という目標が達成できない
+- **`decide`/`rfl` は `rankGo`/`acyclicB` で kernel 簡約に詰まる**（Lean 4 の既知の
+  現象——well-founded 再帰は kernel `whnf` では簡約されないことがある一方、
+  `#eval`/`#guard`（コンパイル評価）は問題なく動く）: 具体的な文法に対して
+  `acyclicB g = true` を実引数として構成する必要がある箇所（`Examples.lean` の
+  `closureReturnAcyclic` 等）では、`by decide`/`by rfl` ではなく、関連する等式補題
+  （`rankGo`、`rankSuccs`、`natElem`、`MGrammar.calls`、文法自体の `def` など）を
+  全部並べた `by simp [...]` で計算を書き換えベースで駆動する
+- **`.call i margs` の順序**: Scala 参照実装は「実引数を展開してから callee の生の
+  本体に代入し、代入結果を再度展開する」が、この形式化は「callee の本体と実引数を
+  独立に展開してから代入する」（各々が単独で測度を厳密に下げるため）。両者は
+  「呼び出しが残らない」という最終的な不動点では一致する——`expand` は呼び出しを
+  作り出さず消すだけなので、すでに呼び出しなしの2つの断片を `subst` で合流させても
+  呼び出しは復活しない（これが `subst_hasCall_eq_false` の内容）——が、この違いは
+  参照実装の逐語的アルゴリズムからの意図的な乖離であり見落としではない、として
+  `Expand.lean` のヘッダに明記した
+- **Lens 抽出の新しい既知の制約**: `expand`/`expandGrammar` 自体（等式補題ルート）は
+  抽出できるが、呼び出し側（`Corpus.lean` の差分ケース）から `acyclicB g = true` の
+  具体的な証明項を実引数として渡すと「theorem leaked into executable code」で
+  fail-loud に拒否される——`sigParams` は関数定義の Prop 引数消去はサポートするが
+  呼び出し箇所での消去は未対応と判明（`docs/extractable-subset.md` に追記）。この
+  ため Scala 側の実参照との突き合わせは自動 corpus diff ではなく、実機
+  （`sbt console`）による一回限りの検証（Baz/Apply 成功・`Rec(n)` 60 秒ハング、
+  いずれも M-PEG-5 検討時に実施済み）で代替した——設計時に明記した事前承認済みの
+  スコープカット

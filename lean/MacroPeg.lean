@@ -1,4 +1,6 @@
 import MacroPeg.Syntax
+import MacroPeg.CallGraph
+import MacroPeg.Expand
 import MacroPeg.Semantics
 import MacroPeg.Interp
 import MacroPeg.Fuel

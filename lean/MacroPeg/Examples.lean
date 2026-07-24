@@ -1,6 +1,8 @@
 import MacroPeg.Semantics
 import MacroPeg.Interp
 import MacroPeg.Render
+import MacroPeg.CallGraph
+import MacroPeg.Expand
 
 /-!
 # Headline example: the copy language {ww | w ∈ {a,b}*}
@@ -517,5 +519,53 @@ to invoke it. -/
   (mpegRun closureReturnGrammar .callByName 200
     (.call closureReturnApplyIdx
       [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]) "a".toList) == "fail"
+
+/-! ## M-PEG-5: acyclic macro-expansion smoke tests
+
+`decide`/`rfl` get stuck on `acyclicB`/`rankGo` (the well-founded recursion — see
+`CallGraph.lean`/`Expand.lean` — doesn't reduce well under raw kernel `whnf`, a known
+Lean 4 phenomenon for `WellFounded.fix`-compiled definitions), so proofs that a
+CONCRETE grammar is acyclic (needed as an explicit argument to `MExp.expand`) go
+through `simp` with the equation lemmas spelled out, driving the computation via
+rewriting rather than kernel defeq. Plain `#guard`/`#eval` (compiled evaluation) are
+unaffected and used directly wherever no proof term is needed. -/
+
+theorem closureReturnAcyclic : acyclicB closureReturnGrammar = true := by
+  simp [acyclicB, List.range, List.range.loop, List.all, rankGo, rankSuccs, natElem,
+    MGrammar.calls, closureReturnGrammar, closureReturnBazBody, closureReturnApplyBody,
+    ruleAtM, MExp.staticCalls, MExp.staticCallsArgs]
+
+/-! **The headline**: `Apply(Baz((x -> x)), "a")` — `"fail"` above, pre-expansion — now
+`"ok+0"` once `expand` has inlined `Baz`'s call, turning the unevaluated `.call` bound
+to `Apply`'s `f` into the `.lam` `.callParam` needs. -/
+#guard renderMPeg
+  (mpegRun closureReturnGrammar .callByName 200
+    (MExp.expand closureReturnGrammar closureReturnAcyclic
+      (.call closureReturnApplyIdx
+        [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]))
+    "a".toList) == "ok+0"
+
+/-! Sanity: wrong input still fails post-expansion — the flip above isn't vacuous. -/
+#guard renderMPeg
+  (mpegRun closureReturnGrammar .callByName 200
+    (MExp.expand closureReturnGrammar closureReturnAcyclic
+      (.call closureReturnApplyIdx
+        [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]))
+    "b".toList) == "fail"
+
+/-- `Rec(n: ?) = "a" Rec(n)` — an entirely ordinary, non-left-recursive, perfectly
+well-formed (and normally-terminating-under-ordinary-evaluation) rule that hangs the
+REAL Scala `MacroExpander.expandGrammar` for 60+ seconds (verified this session via
+`sbt console`), because naive syntactic inlining never reaches a fixpoint for a
+self-recursive parameterized rule. `acyclicB` correctly rejects it. -/
+def recBody : MExp := .seq (.chr 'a') (.call 0 [.param 0])
+def recGrammar : MGrammar := { rules := [{ arity := 1, body := recBody }] }
+#guard acyclicB recGrammar == false
+
+/-! The project's own flagship self-recursive grammar (`copyGrammar`, M-PEG's
+`copy_language_ww`) is — correctly — ALSO rejected: it's arity-1 and self-recursive
+with a non-empty argument (`Copy(w "a")`), so the real Scala `MacroExpander` would
+hang on it too, not just this project's toy example above. -/
+#guard acyclicB copyGrammar == false
 
 end Shallot.MacroPeg

@@ -519,6 +519,117 @@ genuinely remains unformalized is the case where `MacroExpander`'s eager
 whole-grammar inlining actually SUCCEEDS — safe and terminating whenever
 the macro-call graph is acyclic — and that's what M-PEG-5 targets.
 
+## 8.10 M-PEG-5 — walking on top of an acyclic graph
+
+`MacroExpander.expandGrammar` is a naive pass: it syntactically inlines
+macro calls wherever it finds them. For a non-recursive macro like
+`Baz`/`Apply`, that turns `Failure` into `Success` just fine. But for
+something as ordinary as `Rec(n: ?) = "a" Rec(n)` — not even
+left-recursive, and perfectly well-behaved under normal evaluation — it
+inlines itself forever and never terminates. We confirmed a real 60+
+second hang against the actual reference implementation. M-PEG-5
+formalizes this `expandGrammar` under the well-formedness condition that a
+parameterized rule's call graph is acyclic, and proves it always
+terminates under that condition.
+
+### Using `rank` directly as the termination measure
+
+Every other function in this project has secured termination the same
+simple way: give up once fuel runs out. M-PEG-5 deliberately didn't take
+that route. Instead, it uses the "rank" derived from the acyclic graph
+itself — for each rule, one more than the highest rank among whatever it
+calls, computed via DFS — directly as the `termination_by` measure. The
+point was to prove the real claim ("acyclicity genuinely guarantees
+termination") word for word, rather than falling back to a safety net
+that just bounds how far things unfold.
+
+The centerpiece is `rank_lt_of_acyclic`: in an acyclic graph, if rule `i`
+calls rule `j`, then `rank j < rank i`, always. The proof splits into two
+monotonicity lemmas. One says more fuel never changes an already-successful
+result — `Fuel.lean`'s `mpegRun_mono` is a direct template, low risk. The
+other says shrinking the `visiting` set can only help (more successes, and
+never a larger value) — this is the project's first piece of genuine graph
+theory, with no local precedent, flagged at design time as the single
+riskiest item in the whole milestone.
+
+That intuition turned out to be correct, and the proof went through — but
+not on the first try, and only after two design pivots. The first: switching
+`foldl` to `foldr`, so that `cons` unfolds directly into `max x (xs.foldr
+max 0)` — with `foldl`, the proof kept getting tangled in which side the
+accumulator landed on. The second: after getting stuck on `List.contains`
+lemma names, switching to a hand-rolled `natElem` function in the same
+style as `argAt` — written as an `if`-expression, it turned out to play
+far better with `simp`/`split`.
+
+As a small side benefit, a quick `#eval` on a diamond-shaped dependency
+(`A` calls both `B` and `C`, both of which call `D`) confirmed the
+`visiting`-based cycle check doesn't false-positive on it: `D` is reached
+independently via two paths (redoing the work, but landing on the same
+rank both times) — exactly the right way to tell a shared descendant apart
+from a genuine cycle.
+
+### T-fix — substitution preserves call-freedom
+
+We also proved that `expand` genuinely reaches the fixpoint
+`MacroExpander` is documented to compute — no calls left anywhere
+(`expand_hasCall_eq_false`). Most of that proof was mechanical, but the
+`.call i (a::as)` case — where an already-expanded body and already-expanded
+actual parameters get joined via `MExp.subst` — demanded a genuinely new
+lemma: if both pieces are call-free, so is the substituted result
+(`subst_hasCall_eq_false`). We proved it via its own mutual induction,
+directly mirroring `MExp.subst`/`substArgs`'s own recursive shape. Mechanical
+in the sense that it just retraces existing structure, but a real proof
+obligation nonetheless — nothing to skip.
+
+### A Lean 4 rite of passage: `decide` getting stuck
+
+Wherever we needed to actually construct a proof term that a concrete
+grammar (`closureReturnGrammar`) is acyclic — to pass to `MExp.expand` —
+`by decide` and `by rfl` both got stuck mid-kernel-reduction. Since
+`rankGo`/`rankSuccs` compile down to well-founded recursion, the kernel's
+`whnf` reduction sometimes can't push all the way through — a reasonably
+well-known Lean 4 phenomenon. What's interesting is that `#eval`/`#guard`
+(compiled evaluation) have no such trouble at all — the headline `#guard`
+below runs just fine. Wherever an actual proof term was unavoidable
+(`closureReturnAcyclic` in `Examples.lean`), we drove the computation by
+rewriting instead of kernel defeq: `by simp [...]` with every relevant
+equation lemma spelled out.
+
+### The headline: `"fail"` becomes `"ok+0"`
+
+One new line landed in `Examples.lean`:
+
+```lean
+#guard renderMPeg
+  (mpegRun closureReturnGrammar .callByName 200
+    (MExp.expand closureReturnGrammar closureReturnAcyclic
+      (.call closureReturnApplyIdx
+        [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]))
+    "a".toList) == "ok+0"
+```
+
+The exact same expression that stayed `"fail"` throughout M-PEG-4/§8.9 now
+evaluates to `"ok+0"` once `expand` runs first. A closure that crosses a
+call boundary genuinely works now — that's the substance of this
+milestone.
+
+### One more extractor discovery
+
+`expand`/`expandGrammar` themselves extract fine via the equation-lemma
+route, but passing a concrete proof term for `acyclicB g = true` as an
+argument at a CALL SITE (as `Corpus.lean`'s differential-corpus style would
+require) makes the extractor reject it outright: "theorem leaked into
+executable code." `Lens/Translate.lean`'s `sigParams` knows how to erase a
+Prop parameter from a function's own DEFINITION, but erasing a Prop
+argument at a call site isn't implemented yet — a function's own
+extractability and its call sites' extractability turned out to be two
+separate questions. So the cross-check against the real reference
+implementation went through the same technique we'd already leaned on
+throughout this project — a one-time `sbt console` verification, run
+directly against `MacroExpander.expandGrammar` itself, confirming both that
+`Baz`/`Apply` really does become `Success` and that `Rec(n)` really does
+hang for 60+ seconds — rather than an automated corpus diff.
+
 ---
 
 [← Chapter 7: In practice — building a verified JSON parser](07-json.html) | [Table of contents](index.html)
