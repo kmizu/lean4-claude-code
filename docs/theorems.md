@@ -264,12 +264,19 @@ i\_（実装定義）は lone surrogate 拒否方針どおり。抽出 Scala 版
   呼び出しは復活しない（これが `subst_hasCall_eq_false` の内容）——が、この違いは
   参照実装の逐語的アルゴリズムからの意図的な乖離であり見落としではない、として
   `Expand.lean` のヘッダに明記した
-- **Lens 抽出の新しい既知の制約**: `expand`/`expandGrammar` 自体（等式補題ルート）は
-  抽出できるが、呼び出し側（`Corpus.lean` の差分ケース）から `acyclicB g = true` の
-  具体的な証明項を実引数として渡すと「theorem leaked into executable code」で
-  fail-loud に拒否される——`sigParams` は関数定義の Prop 引数消去はサポートするが
-  呼び出し箇所での消去は未対応と判明（`docs/extractable-subset.md` に追記）。この
-  ため Scala 側の実参照との突き合わせは自動 corpus diff ではなく、実機
-  （`sbt console`）による一回限りの検証（Baz/Apply 成功・`Rec(n)` 60 秒ハング、
-  いずれも M-PEG-5 検討時に実施済み）で代替した——設計時に明記した事前承認済みの
-  スコープカット
+- **Lens 抽出器の呼び出し箇所 Prop 引数消去（発見してその場で修復）**: `expand`/
+  `expandGrammar` 自体（等式補題ルート）は抽出できたが、当初は呼び出し側
+  （`Corpus.lean` の差分ケース）から `acyclicB g = true` の具体的な証明項を実引数
+  として渡すと「theorem leaked into executable code」で fail-loud に拒否されて
+  いた——`sigParams`（`Lens/Translate.lean`）は関数**定義**側の Prop 引数消去は
+  サポートするが、**呼び出し箇所**での消去は未対応と判明（`docs/extractable-
+  subset.md` に追記）。同じセッション内でこれを修復：`sigParams`（定義側、Prop
+  引数を `Unit` 型のパラメータとして温存——位置を潰さないことで既存の
+  `transDefViaEqns` のパターン位置インデックスに一切影響しない）、`transApp`
+  （呼び出し箇所、Prop 型の実引数を `()` リテラルへ差し替え）、`transMatcher`
+  （名前付き match `match h : e with ...` が各 alt に注入する等式証明の引数も
+  同じ経路で消去）の 3 箇所を変更。proof irrelevance により、どんな証明項が渡され
+  ていても安全に消去できる。既存 27 ルートはいずれも Prop 引数を持たないため退行
+  リスクなし——`make verify` で 60+318+20 ケース全件無退行を確認した上で
+  `mExpandCase`（corpus ID `340`/`341`）を追加し、Lens で自動抽出した Scala
+  経由の 3 方一致（Lean ≡ golden ≡ Scala、計 22 ケース）を達成した

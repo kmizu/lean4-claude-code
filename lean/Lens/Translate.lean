@@ -400,7 +400,11 @@ partial def transApp (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
             err "term" s!"partially applied polymorphic definition '{c}'"
           require c
           let targs ← (args.toList.take nT).mapM (transType ctx.tvars)
-          let rest ← (args.toList.drop nT).mapM (transTerm ctx)
+          let valueArgs := args.toList.drop nT
+          let isPropAt ← valuePositionsIsProp dv.type nT
+          let rest ← (List.range valueArgs.length).mapM fun i =>
+            if (isPropAt[i]?).getD false then pure (MS.SExpr.lit .unit)
+            else transTerm ctx valueArgs[i]!
           return mkApp' (.global [← mangled c] targs) rest
     | some (.thmInfo _) => err "term" s!"theorem '{c}' leaked into executable code"
     | some _ => err "term" s!"unsupported constant '{c}'"
@@ -421,6 +425,20 @@ where
         else
           valueSeen := true
       return n
+  /-- For each of `ty`'s value-parameter positions (i.e. skipping the
+  leading `nT` type binders), whether that parameter's OWN type is a
+  `Prop` — the call-site mirror of `sigParams`' erasure, checked against
+  the callee's declared type rather than the callee's own body. A
+  position beyond `ty`'s arity (over-application, the callee's result
+  itself being applied further) isn't covered by this array; callers
+  treat a missing entry as "not a proof", i.e. translate normally. -/
+  valuePositionsIsProp (ty : Expr) (nT : Nat) : ExtractM (Array Bool) :=
+    forallTelescopeReducing ty fun xs _ => do
+      let mut out : Array Bool := #[]
+      for i in [0 : xs.size] do
+        if i < nT then continue
+        out := out.push (← Meta.isProp (← xs[i]!.fvarId!.getDecl).type)
+      return out
 
 /-- Decompose a matcher application (`f.match_N params motive discrs alts`)
 into a Scala `match` (extractor v2, the review-flagged risk item).
@@ -459,8 +477,15 @@ partial def transMatcher (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
       let pat : MS.Pat := match pats with
         | [p] => p
         | ps => .tuple ps
-      -- RHS args: pattern variables, or `Unit.unit` for field-less
-      -- alternatives (the compiler gives those a unit-thunk parameter).
+      -- RHS args: pattern variables, `Unit.unit` for field-less
+      -- alternatives (the compiler gives those a unit-thunk parameter), or
+      -- ANY Prop-typed term — the extra equality-hypothesis argument a
+      -- NAMED match (`match h : e with ...`) threads into every alt (e.g.
+      -- M-PEG-5's `MExp.expandRule`'s `match hr : ruleAtM g.rules i with`).
+      -- By proof irrelevance a Prop-typed value carries no runtime content
+      -- regardless of what it was "for", so it's erased the same way a
+      -- Prop-typed parameter is in `sigParams`/`transApp` — bound to an
+      -- anonymous dummy, never referenced by the translated alt body.
       let names ← rhs.consumeMData.getAppArgs.toList.mapM fun a => do
         match a.consumeMData with
         | .fvar id =>
@@ -470,7 +495,9 @@ partial def transMatcher (ctx : TCtx) (e : Expr) : ExtractM MS.SExpr := do
         | .const c _ =>
           if c == ``Unit.unit || c == ``PUnit.unit then pure none
           else err "match" s!"unexpected constant '{c}' in match-equation RHS (overlap hypotheses land in v3)"
-        | _ => err "match" "non-variable in match-equation RHS (overlap hypotheses land in v3)"
+        | a' =>
+          if ← Meta.isProp (← Meta.inferType a') then pure none
+          else err "match" "non-variable in match-equation RHS (overlap hypotheses land in v3)"
       pure (pat, names)
     let altBody ← lambdaBoundedTelescope mApp.alts[i]! argNames.length fun xs body => do
       if xs.size != argNames.length then
@@ -518,7 +545,18 @@ def recursionMarkers (e : Expr) : List Name :=
 
 /-- Split a definition's telescope into leading type parameters (Sort
 binders → Scala tparams) and value parameters. Sort binders after a value
-binder are rejected (non-prefix polymorphism). -/
+binder are rejected (non-prefix polymorphism).
+
+A Prop-typed parameter (a well-formedness/termination witness, e.g. M-PEG-5's
+`h : acyclicB g = true`) still occupies its own real Scala parameter slot —
+erased to type `Unit`, never rejected. Keeping the slot (rather than
+compacting it away) is what lets every position-indexed consumer of this
+function's result (`transDefViaEqns`'s pattern-position/`sigNames` bookkeeping
+in particular) stay completely unaware that erasure happened: `tparams.length
++ params.length` still equals the original telescope size, in the original
+order. The call-site half of this erasure (substituting the literal `()`
+for whatever proof term was actually passed) lives in `transApp` below,
+keyed off the SAME `Meta.isProp` check applied to the callee's own type. -/
 def sigParams (xs : Array Expr) : ExtractM (List String × TCtx × List (String × MS.SType)) := do
   let mut ctx : TCtx := {}
   let mut tparams : List String := []
@@ -532,7 +570,9 @@ def sigParams (xs : Array Expr) : ExtractM (List String × TCtx × List (String 
       tparams := tparams ++ [tn]
       ctx := { ctx with tvars := (x.fvarId!, tn) :: ctx.tvars }
     else if ← Meta.isProp ld.type then
-      err "def" "Prop parameter in extracted definition"
+      let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
+      ctx := ctx'
+      params := params ++ [(n, .unit)]
     else
       let (n, ctx') ← pushVar ctx x.fvarId! ld.userName
       ctx := ctx'

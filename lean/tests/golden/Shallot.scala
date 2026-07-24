@@ -614,6 +614,38 @@ def List_map[A, B](f: (A) => B, l: List[A]): List[B] =
     case (head :: tail) => (f(head) :: List_map[A, B](f, tail))
   })
 
+def MacroPeg_MExp_expand(g: MacroPeg_MGrammar, h: Unit, x2: MacroPeg_MExp): MacroPeg_MExp =
+  (x2 match {
+    case MacroPeg_MExp.call(i, Nil) => MacroPeg_MExp.call(i, Nil)
+    case MacroPeg_MExp.call(i, (a :: as)) => MacroPeg_MExp_subst(MacroPeg_MExp_expandArgs(g, (), (a :: as)), MacroPeg_MExp_expandRule(g, (), i))
+    case MacroPeg_MExp.seq(e_u2081, e_u2082) => MacroPeg_MExp.seq(MacroPeg_MExp_expand(g, (), e_u2081), MacroPeg_MExp_expand(g, (), e_u2082))
+    case MacroPeg_MExp.alt(e_u2081, e_u2082) => MacroPeg_MExp.alt(MacroPeg_MExp_expand(g, (), e_u2081), MacroPeg_MExp_expand(g, (), e_u2082))
+    case MacroPeg_MExp.star(e) => MacroPeg_MExp.star(MacroPeg_MExp_expand(g, (), e))
+    case MacroPeg_MExp.notP(e) => MacroPeg_MExp.notP(MacroPeg_MExp_expand(g, (), e))
+    case MacroPeg_MExp.dbg(e) => MacroPeg_MExp.dbg(MacroPeg_MExp_expand(g, (), e))
+    case MacroPeg_MExp.lam(ar, bod) => MacroPeg_MExp.lam(ar, MacroPeg_MExp_expand(g, (), bod))
+    case MacroPeg_MExp.callParam(k, args) => MacroPeg_MExp.callParam(k, MacroPeg_MExp_expandArgs(g, (), args))
+    case MacroPeg_MExp.invoke(ar, bod, args) => MacroPeg_MExp.invoke(ar, MacroPeg_MExp_expand(g, (), bod), MacroPeg_MExp_expandArgs(g, (), args))
+    case MacroPeg_MExp.eps() => MacroPeg_MExp.eps()
+    case MacroPeg_MExp.any() => MacroPeg_MExp.any()
+    case MacroPeg_MExp.chr(c) => MacroPeg_MExp.chr(c)
+    case MacroPeg_MExp.range(lo, hi) => MacroPeg_MExp.range(lo, hi)
+    case MacroPeg_MExp.lit(s) => MacroPeg_MExp.lit(s)
+    case MacroPeg_MExp.param(k) => MacroPeg_MExp.param(k)
+  })
+
+def MacroPeg_MExp_expandArgs(g: MacroPeg_MGrammar, h: Unit, x2: List[MacroPeg_MExp]): List[MacroPeg_MExp] =
+  (x2 match {
+    case Nil => Nil
+    case (e :: es) => (MacroPeg_MExp_expand(g, (), e) :: MacroPeg_MExp_expandArgs(g, (), es))
+  })
+
+def MacroPeg_MExp_expandRule(g: MacroPeg_MGrammar, h: Unit, i: BigInt): MacroPeg_MExp =
+  (MacroPeg_ruleAtM(g.rules, i) match {
+    case None => MacroPeg_MExp_failAlways
+    case Some(r) => MacroPeg_MExp_expand(g, (), r.body)
+  })
+
 def MacroPeg_MExp_failAlways: MacroPeg_MExp =
   MacroPeg_MExp.notP(MacroPeg_MExp.eps())
 
@@ -721,7 +753,10 @@ def MacroPeg_mCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_copyGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_copyIdx, (MacroPeg_MExp.lit(Nil) :: Nil)), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mCases: List[(String, String)] =
-  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: (MacroPeg_mHofDoubleCase("330-mpeg-hof-double-aaaaaaaa", "aaaaaaaa") :: (MacroPeg_mHofDoubleCase("331-mpeg-hof-double-reject-aaaa", "aaaa") :: (MacroPeg_mHofMap2Case("332-mpeg-hof-map2-aba", "aba") :: (MacroPeg_mHofMap2Case("333-mpeg-hof-map2-reject-abx", "abx") :: (MacroPeg_mHofMap2Case("334-mpeg-hof-map2-reject-ab", "ab") :: (MacroPeg_mHofReturnCase("335-mpeg-hof-return-reject-a", "a") :: Nil))))))))))))))))))))
+  (MacroPeg_mCase("300-mpeg-copy-empty", "") :: (MacroPeg_mCase("301-mpeg-copy-aa", "aa") :: (MacroPeg_mCase("302-mpeg-copy-bb", "bb") :: (MacroPeg_mCase("303-mpeg-copy-abab", "abab") :: (MacroPeg_mCase("304-mpeg-copy-aabbaabb", "aabbaabb") :: (MacroPeg_mCase("305-mpeg-copy-reject-ab", "ab") :: (MacroPeg_mCase("306-mpeg-copy-reject-aba", "aba") :: (MacroPeg_mCase("307-mpeg-copy-reject-abba", "abba") :: (MacroPeg_mParCase("310-mpeg-par-f-aaa", "aaa") :: (MacroPeg_mParCase("311-mpeg-par-f-reject-aab", "aab") :: (MacroPeg_mParCase("312-mpeg-par-f-reject-aa", "aa") :: (MacroPeg_mSeqCase("320-mpeg-seq-f-abcabc", "abcabc") :: (MacroPeg_mSeqCase("321-mpeg-seq-f-reject-abcabx", "abcabx") :: (MacroPeg_mSeqCase("322-mpeg-seq-f-reject-abc", "abc") :: (MacroPeg_mHofDoubleCase("330-mpeg-hof-double-aaaaaaaa", "aaaaaaaa") :: (MacroPeg_mHofDoubleCase("331-mpeg-hof-double-reject-aaaa", "aaaa") :: (MacroPeg_mHofMap2Case("332-mpeg-hof-map2-aba", "aba") :: (MacroPeg_mHofMap2Case("333-mpeg-hof-map2-reject-abx", "abx") :: (MacroPeg_mHofMap2Case("334-mpeg-hof-map2-reject-ab", "ab") :: (MacroPeg_mHofReturnCase("335-mpeg-hof-return-reject-a", "a") :: (MacroPeg_mExpandCase("340-mpeg-expand-hof-return-accept-a", "a") :: (MacroPeg_mExpandCase("341-mpeg-expand-hof-return-reject-b", "b") :: Nil))))))))))))))))))))))
+
+def MacroPeg_mExpandCase(id: String, input: String): (String, String) =
+  (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_closureReturnGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp_expand(MacroPeg_closureReturnGrammar, (), MacroPeg_MExp.call(MacroPeg_closureReturnApplyIdx, (MacroPeg_MExp.call(MacroPeg_closureReturnBazIdx, (MacroPeg_MExp.lam(BigInt(1), MacroPeg_MExp.param(BigInt(0))) :: Nil)) :: (MacroPeg_MExp.lit((BigInt(0x61) :: Nil)) :: Nil)))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))
 
 def MacroPeg_mHofDoubleCase(id: String, input: String): (String, String) =
   (id, MacroPeg_renderMPeg(MacroPeg_mpegRun(MacroPeg_doubleHofGrammar, MacroPeg_Strategy.callByName(), BigInt(500), MacroPeg_MExp.seq(MacroPeg_MExp.call(MacroPeg_doubleHofIdx, (MacroPeg_MExp.lam(BigInt(1), MacroPeg_plus1Body) :: (MacroPeg_MExp.lit((BigInt(0x61) :: (BigInt(0x61) :: Nil))) :: Nil))), MacroPeg_MExp.notP(MacroPeg_MExp.any())), RT.stringToList(input))))

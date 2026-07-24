@@ -630,6 +630,70 @@ directly against `MacroExpander.expandGrammar` itself, confirming both that
 `Baz`/`Apply` really does become `Success` and that `Rec(n)` really does
 hang for 60+ seconds — rather than an automated corpus diff.
 
+## 8.11 Closing the extractor gap, right then and there
+
+Right after writing the previous section's "one more extractor discovery,"
+we actually closed that gap in the same session. Tracing it down, `Lens/
+Translate.lean` handles Prop-typed arguments in three separate places:
+
+1. `sigParams` — builds the parameter list for a function's own
+   DEFINITION. This already rejected Prop parameters with an `err`, but
+   equation-lemma-route functions like `MExp.expand` sailed right past
+   that rejection — the "theorem leaked" error from translating the
+   proof term at the CALL SITE fired first, before `sigParams` ever got
+   a chance to complain.
+2. `transApp` — translates actual arguments at a CALL SITE. There was no
+   mechanism here to skip a Prop-typed argument at all; it just handed
+   the proof term straight to `transTerm`, which failed with "theorem
+   leaked into executable code."
+3. `transMatcher` — decomposes a nested `match`. A NAMED match (`match h
+   : e with ...`) threads an extra argument into every alt — a proof
+   that the discriminant equals the pattern. Since that's also a Prop,
+   naively translating it failed with "non-variable in match-equation
+   RHS."
+
+The fix follows the same principle everywhere: by proof irrelevance, a
+Prop-typed value carries zero runtime information, so it's always safe to
+erase it down to `Unit`/`()`.
+
+- `sigParams` no longer REJECTS a Prop parameter — it keeps it as a real
+  `Unit`-typed parameter. Keeping the SLOT (erasing the type, not the
+  position) is what matters: `transDefViaEqns`'s pattern-position indexing
+  (expressions like `sigNames[i - nT]!`) depends on every parameter's
+  count and order staying intact. Compacting away Prop positions would
+  have thrown that indexing off completely. Keeping the position while
+  changing only the type was the lowest-risk fix available.
+- `transApp` now checks the callee's OWN declared type, position by
+  position, with the same `Meta.isProp` check `sigParams` uses, and
+  substitutes the literal `()` for any Prop-typed argument instead of
+  translating it.
+- `transMatcher` now treats any alt-RHS argument that's neither a pattern
+  variable nor `Unit.unit` as erasable too, as long as its type is a
+  Prop — exactly the shape of the equality-proof argument a named match
+  injects.
+
+Fixing all three confirmed something reassuring: none of the existing 27
+extraction roots have ever had a Prop parameter, so there was zero
+regression risk. We ran `make verify` first to confirm all 60+318+20
+existing cases stayed green, then added a differential case in
+`Corpus.lean` that actually calls `MExp.expand` (corpus IDs `340`/`341`),
+achieving a genuine three-way match — Lean-native ≡ golden ≡ Lens-extracted
+Scala — across 22 cases total. The manual `sbt console` verification is no
+longer necessary.
+
+The generated Scala came out exactly as designed:
+
+```scala
+def MacroPeg_MExp_expand(g: MacroPeg_MGrammar, h: Unit, x2: MacroPeg_MExp): MacroPeg_MExp = ...
+// at the call site:
+MacroPeg_MExp_expand(g, (), e)
+```
+
+`h` stays a real `Unit`-typed parameter, and the call site passes `()`
+instead of the actual proof term — the fact that Lean's type system
+guaranteed this grammar is acyclic never shows up in the Scala code at
+all; it just quietly disappears.
+
 ---
 
 [← Chapter 7: In practice — building a verified JSON parser](07-json.html) | [Table of contents](index.html)

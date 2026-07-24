@@ -64,6 +64,19 @@ def mHofReturnCase (id : String) (input : String) : String × String :=
       (.seq (.call closureReturnApplyIdx
         [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]) (.notP .any)) input.toList))
 
+/-- `expand(Apply(Baz((x -> x)), "a")) !.` (M-PEG-5) — mirrors the headline
+`#guard` in `Examples.lean`: post-expansion, the SAME grammar/expression that
+`mHofReturnCase` shows always failing now SUCCEEDS on `"a"` (and still fails on
+anything else). -/
+def mExpandCase (id : String) (input : String) : String × String :=
+  (id, renderMPeg
+    (mpegRun closureReturnGrammar .callByName 500
+      (.seq
+        (MExp.expand closureReturnGrammar closureReturnAcyclic
+          (.call closureReturnApplyIdx
+            [.call closureReturnBazIdx [.lam 1 (.param 0)], .lit ['a']]))
+        (.notP .any)) input.toList))
+
 def mCases : List (String × String) :=
   [ mCase "300-mpeg-copy-empty" "",
     mCase "301-mpeg-copy-aa" "aa",
@@ -84,6 +97,8 @@ def mCases : List (String × String) :=
     mHofMap2Case "332-mpeg-hof-map2-aba" "aba",
     mHofMap2Case "333-mpeg-hof-map2-reject-abx" "abx",
     mHofMap2Case "334-mpeg-hof-map2-reject-ab" "ab",
-    mHofReturnCase "335-mpeg-hof-return-reject-a" "a" ]
+    mHofReturnCase "335-mpeg-hof-return-reject-a" "a",
+    mExpandCase "340-mpeg-expand-hof-return-accept-a" "a",
+    mExpandCase "341-mpeg-expand-hof-return-reject-b" "b" ]
 
 end Shallot.MacroPeg
